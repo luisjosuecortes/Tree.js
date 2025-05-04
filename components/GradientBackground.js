@@ -47,7 +47,7 @@ const BuildingBackground = ({ isFollowing }) => {
     scene.fog = new THREE.Fog(0x040408, 80, 300); // Color casi negro, empieza a los 80, total a los 300 (antes 0x080818, 50, 200)
 
     // --- Cámara Perspectiva ---
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 5000);
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 800);
     camera.position.copy(originalCameraPos.current);
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera; // Guardar referencia a la cámara
@@ -310,58 +310,98 @@ const BuildingBackground = ({ isFollowing }) => {
     const streetYLevel = 0.01;
     const lineYLevel = streetYLevel + 0.005; // Ligeramente encima de la calle
 
+    // Límites para reducir edificios en los bordes
+    const centralArea = Math.floor(gridSize * 0.5); // Zona central reducida al 50% (antes 70%)
+    const midArea = Math.floor(gridSize * 0.7); // Zona intermedia hasta 70% 
+    const outerCentralProbability = 0.25; // Probabilidad de edificio en zona intermedia (antes 0.4)
+    const outerEdgeProbability = 0.15; // Probabilidad aún menor para los bordes más externos
+
     for (let i = -gridSize; i <= gridSize; i++) {
         for (let j = -gridSize; j <= gridSize; j++) {
             // Edificio
             if (Math.abs(i) > 1 || Math.abs(j) > 1) {
-                 const building = new THREE.Mesh(buildingGeometry, buildingMaterial);
-                 const height = Math.max(1.5, Math.random() * 12);
-                 building.scale.set(buildingWidth, height, buildingWidth);
-                 building.position.set(i * spacing, height / 2, j * spacing);
-                 buildingGroup.add(building);
+                 // Determinamos en qué zona está el edificio
+                 const distanceFromCenter = Math.max(Math.abs(i), Math.abs(j));
+                 const isInCentralArea = distanceFromCenter <= centralArea;
+                 const isInMidArea = distanceFromCenter <= midArea && !isInCentralArea;
+                 const isInOuterArea = distanceFromCenter > midArea;
+                 
+                 // Aplicamos diferentes probabilidades según la zona
+                 let shouldCreateBuilding = false;
+                 
+                 if (isInCentralArea) {
+                     shouldCreateBuilding = true; // Siempre creamos edificios en zona central
+                 } else if (isInMidArea) {
+                     shouldCreateBuilding = Math.random() < outerCentralProbability;
+                 } else { // área exterior
+                     shouldCreateBuilding = Math.random() < outerEdgeProbability;
+                 }
+                 
+                 if (shouldCreateBuilding) {
+                     // Usar la misma geometría para todos los edificios, sin simplificar
+                     const geometry = buildingGeometry;
+                     
+                     const building = new THREE.Mesh(geometry, buildingMaterial);
+                     
+                     // Variar la altura según zona (más planos en zonas exteriores)
+                     let height;
+                     if (isInCentralArea) {
+                         height = Math.max(1.5, Math.random() * 12); // Altura variada en centro
+                     } else if (isInMidArea) {
+                         height = Math.max(1.5, Math.random() * 10); // Altura intermedia aumentada (antes 8)
+                     } else {
+                         height = Math.max(1.5, Math.random() * 6); // Altura exterior aumentada (antes 4)
+                     }
+                     
+                     building.scale.set(buildingWidth, height, buildingWidth);
+                     building.position.set(i * spacing, height / 2, j * spacing);
+                     buildingGroup.add(building);
 
-                 // Añadir ventanas aleatoriamente a algunos edificios
-                 if (Math.random() < 0.30) { // ~30% de probabilidad (antes 0.15)
-                    const windowCount = 2; // Exactamente 2 ventanas (antes 4)
-                    
-                    // Elegir un par de caras opuestas: (Frontal/Trasera) o (Derecha/Izquierda)
-                    const useZAxisPair = Math.random() > 0.5;
-                    const faceIndices = useZAxisPair ? [0, 1] : [2, 3]; // [0:+Z, 1:-Z] o [2:+X, 3:-X]
-
-                    for (let k = 0; k < windowCount; k++) { // Iterar exactamente 2 veces
-                        const windowMesh = new THREE.Mesh(windowGeometry, windowMaterial);
-                        const faceIndex = faceIndices[k]; // Usar la cara del par elegido
-
-                        // Calcular posición y rotación local en la cara elegida
-                        const buildingLocalWidth = 1.0; // Ancho/Profundidad local antes de escalar
-                        const buildingLocalHeight = 1.0;
-                        const epsilon = 0.01; // Pequeño offset hacia afuera
-
-                        // Posición Y aleatoria (evitando bordes superior/inferior)
-                        const wy = (Math.random() * 0.8 + 0.1) * buildingLocalHeight - buildingLocalHeight / 2; // Entre 10% y 90% de altura local
-
-                        if (faceIndex === 0) { // Cara +Z (Frontal)
-                            const wx = (Math.random() - 0.5) * (buildingLocalWidth - windowSize);
-                            windowMesh.position.set(wx, wy, buildingLocalWidth / 2 + epsilon);
-                        } else if (faceIndex === 1) { // Cara -Z (Trasera)
-                            const wx = (Math.random() - 0.5) * (buildingLocalWidth - windowSize);
-                            windowMesh.position.set(wx, wy, -buildingLocalWidth / 2 - epsilon);
-                            windowMesh.rotation.y = Math.PI;
-                        } else if (faceIndex === 2) { // Cara +X (Derecha)
-                            const wz = (Math.random() - 0.5) * (buildingLocalWidth - windowSize);
-                            windowMesh.position.set(buildingLocalWidth / 2 + epsilon, wy, wz);
-                            windowMesh.rotation.y = Math.PI / 2;
-                        } else { // Cara -X (Izquierda)
-                            const wz = (Math.random() - 0.5) * (buildingLocalWidth - windowSize);
-                            windowMesh.position.set(-buildingLocalWidth / 2 - epsilon, wy, wz);
-                            windowMesh.rotation.y = -Math.PI / 2;
-                        }
+                     // Añadir ventanas solo a edificios en zona central y algunos de la zona media
+                     const windowProbability = isInCentralArea ? 0.30 : (isInMidArea ? 0.15 : 0.10);
+                     
+                     if (Math.random() < windowProbability) {
+                        const windowCount = isInCentralArea ? 3 : 1; // Solo una ventana en zonas no centrales
                         
-                        // Compensar escala del padre para mantener tamaño visual aprox.
-                        windowMesh.scale.set(1 / buildingWidth, 1 / height, 1 / buildingWidth);
+                        // Elegir un par de caras opuestas: (Frontal/Trasera) o (Derecha/Izquierda)
+                        const useZAxisPair = Math.random() > 0.5;
+                        const faceIndices = useZAxisPair ? [0, 1] : [2, 3]; // [0:+Z, 1:-Z] o [2:+X, 3:-X]
 
-                        building.add(windowMesh); // Añadir ventana como hija del edificio
-                    }
+                        for (let k = 0; k < windowCount; k++) { // Iterar según cantidad de ventanas
+                            const windowMesh = new THREE.Mesh(windowGeometry, windowMaterial);
+                            const faceIndex = faceIndices[k % faceIndices.length]; // Usar la cara del par elegido
+
+                            // Calcular posición y rotación local en la cara elegida
+                            const buildingLocalWidth = 1.0; // Ancho/Profundidad local antes de escalar
+                            const buildingLocalHeight = 1.0;
+                            const epsilon = 0.01; // Pequeño offset hacia afuera
+
+                            // Posición Y aleatoria (evitando bordes superior/inferior)
+                            const wy = (Math.random() * 0.8 + 0.1) * buildingLocalHeight - buildingLocalHeight / 2; // Entre 10% y 90% de altura local
+
+                            if (faceIndex === 0) { // Cara +Z (Frontal)
+                                const wx = (Math.random() - 0.5) * (buildingLocalWidth - windowSize);
+                                windowMesh.position.set(wx, wy, buildingLocalWidth / 2 + epsilon);
+                            } else if (faceIndex === 1) { // Cara -Z (Trasera)
+                                const wx = (Math.random() - 0.5) * (buildingLocalWidth - windowSize);
+                                windowMesh.position.set(wx, wy, -buildingLocalWidth / 2 - epsilon);
+                                windowMesh.rotation.y = Math.PI;
+                            } else if (faceIndex === 2) { // Cara +X (Derecha)
+                                const wz = (Math.random() - 0.5) * (buildingLocalWidth - windowSize);
+                                windowMesh.position.set(buildingLocalWidth / 2 + epsilon, wy, wz);
+                                windowMesh.rotation.y = Math.PI / 2;
+                            } else { // Cara -X (Izquierda)
+                                const wz = (Math.random() - 0.5) * (buildingLocalWidth - windowSize);
+                                windowMesh.position.set(-buildingLocalWidth / 2 - epsilon, wy, wz);
+                                windowMesh.rotation.y = -Math.PI / 2;
+                            }
+                            
+                            // Compensar escala del padre para mantener tamaño visual aprox.
+                            windowMesh.scale.set(1 / buildingWidth, 1 / height, 1 / buildingWidth);
+
+                            building.add(windowMesh); // Añadir ventana como hija del edificio
+                        }
+                     }
                  }
             }
 
