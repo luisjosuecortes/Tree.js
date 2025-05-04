@@ -355,6 +355,8 @@ const BuildingBackground = ({ isFollowing }) => {
                      
                      building.scale.set(buildingWidth, height, buildingWidth);
                      building.position.set(i * spacing, height / 2, j * spacing);
+                     // Guardar la zona a la que pertenece el edificio
+                     building.userData.zone = isInCentralArea ? 'central' : (isInMidArea ? 'mid' : 'outer');
                      buildingGroup.add(building);
 
                      // Añadir ventanas solo a edificios en zona central y algunos de la zona media
@@ -620,6 +622,21 @@ const BuildingBackground = ({ isFollowing }) => {
       animationFrameIdRef.current = requestAnimationFrame(animate);
       const delta = clockRef.current.getDelta();
       const elapsedTime = clockRef.current.getElapsedTime();
+
+      // --- Control de Visibilidad de Edificios (Optimización Vista Aérea) ---
+      const isAerialView = !followedPedestrianRef.current;
+      buildingGroup.children.forEach(building => {
+          const zone = building.userData.zone;
+          if (isAerialView) {
+              // En vista aérea, ocultar edificios exteriores y quizás intermedios
+              building.visible = (zone === 'central' || zone === 'mid'); // Ocultar solo 'outer'
+              // Para mayor rendimiento, podrías ocultar también la zona 'mid':
+              building.visible = (zone === 'central'); 
+          } else {
+              // En vista de primera persona, mostrar todos los edificios
+              building.visible = true;
+          }
+      });
 
       // --- Movimiento Cámara --- //
       if (followedPedestrianRef.current) {
