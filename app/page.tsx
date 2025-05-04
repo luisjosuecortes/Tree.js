@@ -1,6 +1,6 @@
 'use client'; // Marcar como Componente de Cliente
 
-import React from "react";
+import React, { useState, useCallback } from "react"; // Importar useState y useCallback
 import dynamic from 'next/dynamic';
 
 // Importar dinámicamente el componente BuildingBackground (anteriormente GradientBackground) sin SSR
@@ -24,12 +24,20 @@ const ParticleSystem = dynamic(() => import('../components/ParticleSystem'), {
 */
 
 export default function Home() {
+  // Estado para controlar si la cámara está siguiendo a un peatón
+  const [isFollowingPedestrian, setIsFollowingPedestrian] = useState(false);
+
+  // Función para iniciar el seguimiento (envuelta en useCallback para estabilidad)
+  const handleStartFollow = useCallback(() => {
+    setIsFollowingPedestrian(true);
+  }, []); // Sin dependencias, solo se crea una vez
+
   return (
     <div className="min-h-screen w-full relative"> {/* Contenedor principal relativo */}
-      <BuildingBackground /> {/* Usar el nuevo componente de edificios */}
-      {/* <ParticleSystem /> */}{/* Comentado temporalmente */}
-      <AnimatedText />
-      {/* El texto se renderizará encima del fondo de edificios */}
+      {/* Pasar el estado de seguimiento al fondo */}
+      <BuildingBackground isFollowing={isFollowingPedestrian} />
+      {/* Renderizar el texto solo si NO estamos siguiendo */}
+      {!isFollowingPedestrian && <AnimatedText onStartFollow={handleStartFollow} />}
     </div>
   );
 }

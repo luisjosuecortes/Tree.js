@@ -4,11 +4,37 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 
-const BuildingBackground = () => {
+const BuildingBackground = ({ isFollowing }) => {
   const mountRef = useRef(null);
+  const cameraRef = useRef(); // Referencia para la cámara
+  const pedestrianGroupRef = useRef(); // Referencia para el grupo de peatones
+  const followedPedestrianRef = useRef(null); // Referencia para el peatón a seguir
+  const originalCameraPos = useRef(new THREE.Vector3(0, 8, 20)); // Guardar pos inicial
+  const animationFrameIdRef = useRef(); // Para cancelar el frame correcto
+  const clockRef = useRef(null); // Ref para el Clock
+
+  // Refs para el movimiento de cabeza
+  const isLookingAround = useRef(false);
+  const currentLookOffset = useRef(new THREE.Vector3(0, 0, 0));
+  const targetLookOffset = useRef(new THREE.Vector3(0, 0, 0));
+  const lookAroundEndTime = useRef(0);
+  const nextLookAroundTime = useRef(5); // Empezar a mirar después de 5s
+  const lookAroundParams = { // Configuración
+      duration: 0.8, // Duración para mirar a un lado
+      returnDuration: 1.2, // Duración para volver
+      pauseMin: 3.0, // Pausa mínima entre miradas
+      pauseMax: 8.0, // Pausa máxima
+      maxOffsetH: 0.6, // Desplazamiento horizontal máx (radianes)
+      maxOffsetV: 0.3  // Desplazamiento vertical máx
+  };
 
   useEffect(() => {
     if (!mountRef.current) return;
+
+    // Inicializar clock si no existe
+    if (!clockRef.current) {
+        clockRef.current = new THREE.Clock();
+    }
 
     const currentMount = mountRef.current;
     let animationFrameId;
@@ -21,9 +47,10 @@ const BuildingBackground = () => {
     scene.fog = new THREE.Fog(0x040408, 80, 300); // Color casi negro, empieza a los 80, total a los 300 (antes 0x080818, 50, 200)
 
     // --- Cámara Perspectiva ---
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 8, 20); // Ajustar posición para mejor vista
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 5000);
+    camera.position.copy(originalCameraPos.current);
     camera.lookAt(0, 0, 0);
+    cameraRef.current = camera; // Guardar referencia a la cámara
 
     // --- Renderizador y Composer ---
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -106,7 +133,8 @@ const BuildingBackground = () => {
     const buildingWidth = 1.2; // Edificios un poco más anchos
     const streetWidth = spacing - buildingWidth;
     const groundSize = gridSize * spacing * 1.2;
-    const groundGeometry = new THREE.PlaneGeometry(groundSize, groundSize);
+    const enlargedGroundSize = groundSize * 10; // Hacer el suelo 10 veces más grande
+    const groundGeometry = new THREE.PlaneGeometry(enlargedGroundSize, enlargedGroundSize);
     const streetHGeometry = new THREE.PlaneGeometry(groundSize, streetWidth);
     const streetVGeometry = new THREE.PlaneGeometry(streetWidth, groundSize);
     const carWidth = 0.4, carHeight = 0.2, carLength = 0.8;
@@ -121,15 +149,22 @@ const BuildingBackground = () => {
     const trafficLightBulbGeometry = new THREE.SphereGeometry(0.07, 8, 8); // Bombillas un poco más pequeñas
     const windowSize = 0.3; // Tamaño de la ventana cuadrada
     const windowGeometry = new THREE.PlaneGeometry(windowSize, windowSize);
-    // Geometrías para Stickman (reemplaza CapsuleGeometry)
-    const headRadius = 0.09;
-    const torsoHeight = 0.38;
-    const torsoRadius = 0.03;
-    const limbLength = 0.30;
-    const limbRadius = 0.023;
-    const headGeometry = new THREE.SphereGeometry(headRadius, 8, 6);
-    const torsoGeometry = new THREE.CylinderGeometry(torsoRadius, torsoRadius, torsoHeight, 8);
-    const limbGeometry = new THREE.CylinderGeometry(limbRadius, limbRadius, limbLength, 6);
+    
+    // --- Geometrías para Stickman (Revisadas) ---
+    const segments = 12; // Aumentar segmentos para suavidad
+    const headRadius = 0.11; // Ligeramente más grande
+    const neckHeight = 0.05; 
+    const neckRadius = 0.025;
+    const torsoHeight = 0.35; // Altura del cilindro central de la cápsula torso
+    const torsoRadius = 0.04; // Más grueso
+    const limbLength = 0.32; // Longitud del cilindro central de la cápsula extremidad
+    const limbRadius = 0.03; // Más gruesas
+
+    const headGeometry = new THREE.SphereGeometry(headRadius, segments * 2, segments);
+    const neckGeometry = new THREE.CapsuleGeometry(neckRadius, neckHeight, segments / 2, segments); // Usar Capsule
+    const torsoGeometry = new THREE.CapsuleGeometry(torsoRadius, torsoHeight, segments / 2, segments); // Usar Capsule
+    const limbGeometry = new THREE.CapsuleGeometry(limbRadius, limbLength, segments / 2, segments); // Usar Capsule
+
     // Geometría para Líneas de Calle
     const lineLength = 0.8;
     const lineWidth = 0.05;
@@ -269,6 +304,7 @@ const BuildingBackground = () => {
     const carGroup = new THREE.Group();
     const utilityGroup = new THREE.Group(); // Grupo para farolas y semáforos
     const pedestrianGroup = new THREE.Group(); // Grupo para peatones
+    pedestrianGroupRef.current = pedestrianGroup; // ASIGNAR REFERENCIA
 
     const lineSegmentSpacing = lineLength * 2.5; // Espacio entre segmentos de línea
     const streetYLevel = 0.01;
@@ -530,22 +566,112 @@ const BuildingBackground = () => {
     window.addEventListener('resize', handleResize);
 
     // --- Bucle de Animación --- //
-    const clock = new THREE.Clock();
+    const targetPositionVec = new THREE.Vector3();
+    const offsetVec = new THREE.Vector3();
+    const cameraPositionVec = new THREE.Vector3();
+    const lookAtPositionVec = new THREE.Vector3();
+    const forwardVec = new THREE.Vector3();
+    const baseLookDirection = new THREE.Vector3(); // Dirección base (adelante y arriba)
+    const finalLookDirection = new THREE.Vector3(); // Dirección final + offset
+    const zeroVector = new THREE.Vector3(0,0,0); // Para comparar
+    const lookLerpFactor = 0.06; // Suavidad de la interpolación de mirada
+
     const animate = () => {
-        animationFrameId = requestAnimationFrame(animate);
-        const delta = clock.getDelta();
-        const elapsedTime = clock.getElapsedTime();
+      animationFrameIdRef.current = requestAnimationFrame(animate);
+      const delta = clockRef.current.getDelta();
+      const elapsedTime = clockRef.current.getElapsedTime();
 
-        // Movimiento Cámara
-        camera.position.x = Math.sin(elapsedTime * 0.04) * 10; // Ampliar movimiento cámara
-        camera.position.z = 20 + Math.cos(elapsedTime * 0.04) * 10;
-        camera.lookAt(0, 1, 0); // Mirar un poco más arriba
+      // --- Movimiento Cámara --- //
+      if (followedPedestrianRef.current) {
+        const pedestrian = followedPedestrianRef.current;
+        const camera = cameraRef.current;
 
-        // Movimiento Carros
-        carGroup.children.forEach(car => {
-            car.translateZ(car.userData.speed); // Mover hacia adelante localmente
+        // --- Calcular Posición Cámara (igual que antes) ---
+        pedestrian.getWorldPosition(targetPositionVec);
+        const headHeight = torsoHeight + headRadius * 0.9;
+        offsetVec.set(0, headHeight, 0.1);
+        offsetVec.applyQuaternion(pedestrian.quaternion);
+        cameraPositionVec.copy(targetPositionVec).add(offsetVec);
+        camera.position.lerp(cameraPositionVec, 0.15);
 
-            // Reinicio básico de posición
+        // --- Calcular Dirección Base de Mirada (Adelante y Arriba) --- //
+        forwardVec.set(0, 0, 1); // Vector hacia adelante local del peatón
+        forwardVec.applyQuaternion(pedestrian.quaternion);
+        baseLookDirection.copy(forwardVec);
+        baseLookDirection.y += 0.3; // Mirar más arriba por defecto (ajusta este valor)
+        baseLookDirection.normalize();
+
+        // --- Lógica de Movimiento de Cabeza --- //
+        // Decidir si iniciar una nueva mirada
+        if (!isLookingAround.current && elapsedTime >= nextLookAroundTime.current) {
+            if (Math.random() < 0.6) { // 60% de probabilidad de mirar
+                isLookingAround.current = true;
+                // Calcular offset aleatorio (horizontal y vertical)
+                const randomAngleH = (Math.random() - 0.5) * 2 * lookAroundParams.maxOffsetH;
+                const randomAngleV = (Math.random() - 0.5) * 2 * lookAroundParams.maxOffsetV;
+                // Crear vector de offset (más simple que ángulos)
+                targetLookOffset.current.set(randomAngleH, randomAngleV, 0);
+                // targetLookOffset.current.applyQuaternion(pedestrian.quaternion); // ¿Aplicar rotación? No, es un offset relativo a la vista
+                lookAroundEndTime.current = elapsedTime + lookAroundParams.duration;
+            }
+             else {
+                 // Si no miramos, esperar un poco menos para volver a intentar
+                 nextLookAroundTime.current = elapsedTime + lookAroundParams.pauseMin * 0.5;
+            }
+        }
+
+        // Interpolar la mirada y gestionar fases
+        if (isLookingAround.current) {
+            currentLookOffset.current.lerp(targetLookOffset.current, lookLerpFactor);
+
+            if (elapsedTime >= lookAroundEndTime.current) {
+                // Si estábamos mirando a un lado (target no es cero)
+                if (!targetLookOffset.current.equals(zeroVector)) {
+                    targetLookOffset.current.set(0, 0, 0); // Establecer objetivo a cero (volver)
+                    lookAroundEndTime.current = elapsedTime + lookAroundParams.returnDuration;
+                } else { // Si ya estábamos volviendo (target era cero)
+                    isLookingAround.current = false;
+                    currentLookOffset.current.set(0, 0, 0); // Resetear offset actual
+                    // Calcular próxima vez para mirar
+                    const pause = lookAroundParams.pauseMin + Math.random() * (lookAroundParams.pauseMax - lookAroundParams.pauseMin);
+                    nextLookAroundTime.current = elapsedTime + pause;
+                }
+            }
+        }
+         else {
+             // Si no estamos mirando activamente, asegurarse de que volvemos rápido al centro
+             currentLookOffset.current.lerp(zeroVector, lookLerpFactor * 2.0); // Doble velocidad para volver
+        }
+
+        // --- Aplicar Mirada Final --- //
+        // Rotar la dirección base según el offset actual (simplificado)
+        // NOTA: Esto es una aproximación. Una rotación correcta usaría cuaterniones.
+        finalLookDirection.copy(baseLookDirection);
+        // Aplicar offset horizontal como rotación Y aproximada
+        finalLookDirection.applyAxisAngle(new THREE.Vector3(0, 1, 0), currentLookOffset.current.x);
+        // Aplicar offset vertical como rotación X local aproximada
+        const rightVec = new THREE.Vector3().crossVectors(camera.up, finalLookDirection).normalize(); // Vector derecha local
+        finalLookDirection.applyAxisAngle(rightVec, currentLookOffset.current.y);
+
+        lookAtPositionVec.copy(camera.position).add(finalLookDirection);
+        camera.lookAt(lookAtPositionVec);
+
+      } else {
+        // --- Movimiento Cámara Original --- //
+        const camera = cameraRef.current;
+        if (originalCameraPos.current && camera) { 
+            const basePosX = originalCameraPos.current.x;
+            const basePosZ = originalCameraPos.current.z;
+            camera.position.x = basePosX + Math.sin(elapsedTime * 0.04) * 10;
+            camera.position.z = basePosZ + Math.cos(elapsedTime * 0.04) * 10;
+            camera.position.y = originalCameraPos.current.y;
+            camera.lookAt(0, 1, 0);
+        }
+      }
+
+      // --- Movimiento Carros --- //
+      carGroup.children.forEach(car => {
+            car.translateZ(car.userData.speed);
             const limit = groundSize * 0.5;
             if (Math.abs(car.position.x) > limit || Math.abs(car.position.z) > limit) {
                  const laneOffset = streetWidth * 0.25 * (Math.random() > 0.5 ? 1 : -1);
@@ -561,69 +687,60 @@ const BuildingBackground = () => {
             }
         });
 
-        // Movimiento Peatones
-        const limit = groundSize * 0.5;
-        pedestrianGroup.children.forEach((pedestrian, index) => {
-            // Animar piernas ligeramente para simular caminata
-            let uuidOffset = 0;
-            for(let charIndex = 0; charIndex < Math.min(pedestrian.uuid.length, 6); charIndex++) {
-                uuidOffset += pedestrian.uuid.charCodeAt(charIndex);
-            }
-            const legMovement = Math.sin(elapsedTime * 10 + uuidOffset) * 0.4; // Usar offset calculado
-            
-            const children = pedestrian.children;
-            // Encontrar piernas por índice (más robusto si el orden es fijo)
-            const leftLeg = children[4]; // Orden esperado: torso, head, armL, armR, legL, legR
-            const rightLeg = children[5];
-            if (leftLeg) leftLeg.rotation.x = legMovement;
-            if (rightLeg) rightLeg.rotation.x = -legMovement;
-
-            pedestrian.translateZ(Math.abs(pedestrian.userData.speed)); // Moverse hacia adelante localmente
-
-            // Comprobación básica de límites y reposicionamiento
-            const pos = pedestrian.position;
-            const needsRepositionX = pedestrian.userData.isHorizontal && Math.abs(pos.x) > limit;
-            const needsRepositionZ = !pedestrian.userData.isHorizontal && Math.abs(pos.z) > limit;
-
-            if (needsRepositionX || needsRepositionZ) {
-                // Elegir nuevo tipo de calle y lado aleatoriamente
-                const isHorizontal = Math.random() > 0.5;
-                const side = Math.random() > 0.5 ? 1 : -1;
-                const speed = (Math.random() * 0.015 + 0.005) * (Math.random() > 0.5 ? 1 : -1);
-                let startPos;
-
-                if (isHorizontal) {
-                    const streetZ = (Math.floor(Math.random() * (gridSize * 2)) - gridSize + 0.5) * spacing;
-                    const sidewalkZ = streetZ + side * streetWidth * sidewalkOffsetRatio;
-                    // Determinar X inicial basado en la dirección de donde venía
-                    startPos = needsRepositionX ? -limit * Math.sign(pos.x) * 0.98 : (Math.random() * 2 - 1) * limit * 0.95;
-                    pedestrian.position.set(startPos, 0, sidewalkZ); // Y=0
-                    pedestrian.rotation.y = speed > 0 ? -Math.PI / 2 : Math.PI / 2;
-                } else {
-                    const streetX = (Math.floor(Math.random() * (gridSize * 2)) - gridSize + 0.5) * spacing;
-                    const sidewalkX = streetX + side * streetWidth * sidewalkOffsetRatio;
-                    // Determinar Z inicial basado en la dirección de donde venía
-                    startPos = needsRepositionZ ? -limit * Math.sign(pos.z) * 0.98 : (Math.random() * 2 - 1) * limit * 0.95;
-                    pedestrian.position.set(sidewalkX, 0, startPos); // Y=0
-                    pedestrian.rotation.y = speed > 0 ? Math.PI : 0;
+      // --- Movimiento Peatones --- //
+      const limit = groundSize * 0.5;
+      if (pedestrianGroupRef.current) { // Check if ref is populated
+            pedestrianGroupRef.current.children.forEach((pedestrian, index) => {
+                let uuidOffset = 0;
+                for(let charIndex = 0; charIndex < Math.min(pedestrian.uuid.length, 6); charIndex++) {
+                    uuidOffset += pedestrian.uuid.charCodeAt(charIndex);
                 }
-                pedestrian.userData.speed = speed;
-                pedestrian.userData.isHorizontal = isHorizontal;
-            }
-        });
+                const legMovement = Math.sin(elapsedTime * 10 + uuidOffset) * 0.4;
+                const children = pedestrian.children;
+                const leftLeg = children[4];
+                const rightLeg = children[5];
+                if (leftLeg) leftLeg.rotation.x = legMovement;
+                if (rightLeg) rightLeg.rotation.x = -legMovement;
+                pedestrian.translateZ(Math.abs(pedestrian.userData.speed));
+                const pos = pedestrian.position;
+                const needsRepositionX = pedestrian.userData.isHorizontal && Math.abs(pos.x) > limit;
+                const needsRepositionZ = !pedestrian.userData.isHorizontal && Math.abs(pos.z) > limit;
+                if (needsRepositionX || needsRepositionZ) {
+                    const isHorizontal = Math.random() > 0.5;
+                    const side = Math.random() > 0.5 ? 1 : -1;
+                    const speed = (Math.random() * 0.015 + 0.005) * (Math.random() > 0.5 ? 1 : -1);
+                    let startPos;
+                    if (isHorizontal) {
+                        const streetZ = (Math.floor(Math.random() * (gridSize * 2)) - gridSize + 0.5) * spacing;
+                        const sidewalkZ = streetZ + side * streetWidth * sidewalkOffsetRatio;
+                        startPos = needsRepositionX ? -limit * Math.sign(pos.x) * 0.98 : (Math.random() * 2 - 1) * limit * 0.95;
+                        pedestrian.position.set(startPos, 0, sidewalkZ);
+                        pedestrian.rotation.y = speed > 0 ? -Math.PI / 2 : Math.PI / 2;
+                    } else {
+                        const streetX = (Math.floor(Math.random() * (gridSize * 2)) - gridSize + 0.5) * spacing;
+                        const sidewalkX = streetX + side * streetWidth * sidewalkOffsetRatio;
+                        startPos = needsRepositionZ ? -limit * Math.sign(pos.z) * 0.98 : (Math.random() * 2 - 1) * limit * 0.95;
+                        pedestrian.position.set(sidewalkX, 0, startPos);
+                        pedestrian.rotation.y = speed > 0 ? Math.PI : 0;
+                    }
+                    pedestrian.userData.speed = speed;
+                    pedestrian.userData.isHorizontal = isHorizontal;
+                }
+           });
+        } // End check for pedestrianGroupRef.current
 
-        composer.render(delta);
+      composer.render(delta);
     };
     animate();
 
     // --- Limpieza --- //
     return () => {
-        window.removeEventListener('resize', handleResize);
-        cancelAnimationFrame(animationFrameId);
-        if (currentMount && renderer.domElement) {
-            currentMount.removeChild(renderer.domElement);
-        }
-        scene.traverse(object => {
+      window.removeEventListener('resize', handleResize);
+      cancelAnimationFrame(animationFrameIdRef.current);
+      if (currentMount && renderer.domElement) {
+        currentMount.removeChild(renderer.domElement);
+      }
+      scene.traverse(object => {
             if (object.geometry) object.geometry.dispose();
             if (object.material) {
                 if (Array.isArray(object.material)) {
@@ -633,7 +750,6 @@ const BuildingBackground = () => {
                 }
             }
         });
-        // Disponer materiales específicos de peatones
         pedestrianMaterials.forEach(m => m.dispose());
         streetLineMaterial.dispose(); // Disponer material de línea
         // Disponer geometrías de Stickman
@@ -661,8 +777,34 @@ const BuildingBackground = () => {
         renderScene.dispose();
         moonMaterial.dispose(); // Disponer material de la luna
         starMaterial.dispose(); // Disponer material de estrellas
+        groundMaterial.dispose(); // Dispose ground material
     };
-  }, []);
+  }, []); // Dependencia vacía inicial
+
+  // --- Efecto para manejar isFollowing --- //
+  useEffect(() => {
+    if (isFollowing && pedestrianGroupRef.current && pedestrianGroupRef.current.children.length > 0) {
+      const pedestrians = pedestrianGroupRef.current.children;
+      const randomIndex = Math.floor(Math.random() * pedestrians.length);
+      followedPedestrianRef.current = pedestrians[randomIndex];
+      if (cameraRef.current) {
+           if (!followedPedestrianRef.current) { 
+               originalCameraPos.current.copy(cameraRef.current.position);
+           } 
+      }
+      // Resetear estado de mirada al empezar a seguir
+      isLookingAround.current = false;
+      currentLookOffset.current.set(0,0,0);
+      targetLookOffset.current.set(0,0,0);
+      // Asegurarse que clockRef.current existe antes de usarlo
+      if (clockRef.current) {
+        nextLookAroundTime.current = clockRef.current.getElapsedTime() + lookAroundParams.pauseMin; // Usar ref
+      }
+
+    } else {
+      followedPedestrianRef.current = null; // Dejar de seguir si isFollowing es false
+    }
+  }, [isFollowing]);
 
   return <div ref={mountRef} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: -1 }} />;
 };

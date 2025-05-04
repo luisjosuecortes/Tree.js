@@ -26,3 +26,15 @@ body {
   padding: 0;
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Animación para el texto "VER PROYECTOS" */
+@keyframes blink-scale {
+  0%, 100% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4; /* Opacidad reducida */
+    transform: scale(0.95); /* Ligeramente más pequeño */
+  }
+}

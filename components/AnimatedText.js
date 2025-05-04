@@ -1,6 +1,6 @@
 import React from 'react';
 
-const AnimatedText = () => {
+const AnimatedText = ({ onStartFollow }) => {
   return (
     <div className="flex flex-col items-center justify-center h-screen absolute top-0 left-0 w-full" style={{ zIndex: 1 }}>
       <h1 style={{
@@ -22,11 +22,14 @@ const AnimatedText = () => {
         fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: '1.8rem',
         fontWeight: '700', // Bold
-        marginTop: '0.5rem',
-        textAlign: 'center',
-        letterSpacing: '0.1em', // Mayor espaciado para subtítulo
-        textShadow: '1px 1px 3px rgba(0,0,0,0.5)', // Sombra sutil para legibilidad
-        opacity: '0.9' // Ligeramente translúcido
+        marginTop: '-0.5rem', // Valor negativo para acercarlo
+        textAlign: 'center', // Mantenemos centrado el bloque, pero empujamos contenido
+        letterSpacing: '0.1em',
+        textShadow: '1px 1px 3px rgba(0,0,0,0.5)',
+        opacity: '0.9',
+        width: '100%', // Aseguramos que ocupe ancho para que el padding funcione
+        paddingLeft: '25%', // Añadido padding izquierdo para empujar a la derecha
+        boxSizing: 'border-box' // Incluir padding en el ancho total
       }}>
         CON THREE.JS
       </p>
@@ -48,6 +51,27 @@ const AnimatedText = () => {
           Notas y proyectos de <a href="https://twitter.com/luiscortespn" target="_blank" rel="noopener noreferrer" style={{color: '#aaaaff', textDecoration: 'underline'}}>@luiscortespenguin</a> con THREE.JS
         </p>
       </div>
+      {/* Nuevo párrafo "VER PROYECTOS" con onClick */}
+      <p
+        style={{
+          color: 'white',
+          fontFamily: 'Arial, Helvetica, sans-serif',
+          fontSize: '1.5rem', // Tamaño ligeramente menor que el subtítulo
+          fontWeight: '700', // Bold
+          marginTop: '3rem', // Más espacio arriba
+          textAlign: 'center',
+          letterSpacing: '0.15em', // Espaciado entre letras aumentado
+          textTransform: 'uppercase', // Todo en mayúsculas
+          textShadow: '1px 1px 3px rgba(0,0,0,0.5)',
+          opacity: '0.8', // Opacidad inicial (la animación la manejará)
+          cursor: 'pointer', // Indicar que es clickeable
+          transition: 'opacity 0.3s ease', // Transición suave al pasar el ratón (se puede quitar si la animación es suficiente)
+          animation: 'blink-scale 2s infinite ease-in-out' // Aplicar la animación
+        }}
+        onClick={onStartFollow} // Llamar a la función pasada por prop al hacer clic
+      >
+        VER PROYECTOS
+      </p>
     </div>
   );
 };
