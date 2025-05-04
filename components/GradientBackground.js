@@ -13,6 +13,16 @@ const BuildingBackground = ({ isFollowing }) => {
   const animationFrameIdRef = useRef(); // Para cancelar el frame correcto
   const clockRef = useRef(null); // Ref para el Clock
 
+  // Refs para la transición de cámara
+  const isTransitioningCamera = useRef(false);
+  const transitionStartTime = useRef(0);
+  const transitionDuration = useRef(5.0); // Duración en segundos
+  const transitionStartPosition = useRef(new THREE.Vector3());
+  const transitionTargetPosition = useRef(new THREE.Vector3());
+  const transitionStartLookAt = useRef(new THREE.Vector3());
+  const transitionTargetLookAt = useRef(new THREE.Vector3());
+  const pendingFollowTarget = useRef(null); // Peatón a seguir después de la transición
+
   // Refs para el movimiento de cabeza
   const isLookingAround = useRef(false);
   const currentLookOffset = useRef(new THREE.Vector3(0, 0, 0));
@@ -111,9 +121,16 @@ const BuildingBackground = ({ isFollowing }) => {
     const windowMaterial = new THREE.MeshBasicMaterial({ color: 0xffffd0, side: THREE.DoubleSide }); // Amarillo más saturado, antes 0xffffe0
     // Materiales para Peatones
     const pedestrianColors = [0xaaaaaa, 0x8888aa, 0xaa8888, 0x88aa88, 0xaaaa88, 0x88aaaa];
-    const pedestrianMaterials = pedestrianColors.map(color => new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0.2 }));
+    const pedestrianMaterials = pedestrianColors.map(color => new THREE.MeshStandardMaterial({
+         color, 
+         roughness: 0.8, 
+         metalness: 0.2,
+         polygonOffset: true, // Activar offset de polígono
+         polygonOffsetFactor: 1, // Factor de offset
+         polygonOffsetUnits: 1   // Unidades de offset
+    }));
     // Material para Líneas de Calle
-    const streetLineMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+    const streetLineMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
     // Material para la Luna
     const moonMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false }); // Añadir fog: false
     // Material para Estrellas
@@ -150,20 +167,22 @@ const BuildingBackground = ({ isFollowing }) => {
     const windowSize = 0.3; // Tamaño de la ventana cuadrada
     const windowGeometry = new THREE.PlaneGeometry(windowSize, windowSize);
     
-    // --- Geometrías para Stickman (Revisadas) ---
-    const segments = 12; // Aumentar segmentos para suavidad
-    const headRadius = 0.11; // Ligeramente más grande
-    const neckHeight = 0.05; 
-    const neckRadius = 0.025;
-    const torsoHeight = 0.35; // Altura del cilindro central de la cápsula torso
-    const torsoRadius = 0.04; // Más grueso
-    const limbLength = 0.32; // Longitud del cilindro central de la cápsula extremidad
-    const limbRadius = 0.03; // Más gruesas
+    // --- Geometrías para Stickman (Revisadas con Manos/Pies) ---
+    const segments = 12; // Mantener segmentos para suavidad
+    const headRadius = 0.12; // Cabeza un poco más grande
+    const neckHeight = 0.04; 
+    const neckRadius = 0.02;
+    const torsoHeight = 0.33; // Torso ligeramente más corto
+    const torsoRadius = 0.045; // Torso un poco más grueso
+    const limbLength = 0.25; // Acortar cilindro de extremidad para hacer espacio a manos/pies
+    const limbRadius = 0.035; // Extremidades un poco más gruesas
+    const handFootRadius = 0.055; // Radio para las esferas de manos/pies (más grande que limbRadius)
 
     const headGeometry = new THREE.SphereGeometry(headRadius, segments * 2, segments);
-    const neckGeometry = new THREE.CapsuleGeometry(neckRadius, neckHeight, segments / 2, segments); // Usar Capsule
-    const torsoGeometry = new THREE.CapsuleGeometry(torsoRadius, torsoHeight, segments / 2, segments); // Usar Capsule
-    const limbGeometry = new THREE.CapsuleGeometry(limbRadius, limbLength, segments / 2, segments); // Usar Capsule
+    const neckGeometry = new THREE.CapsuleGeometry(neckRadius, neckHeight, segments / 2, segments);
+    const torsoGeometry = new THREE.CapsuleGeometry(torsoRadius, torsoHeight, segments / 2, segments); 
+    const limbGeometry = new THREE.CapsuleGeometry(limbRadius, limbLength, segments / 2, segments); 
+    const handFootGeometry = new THREE.SphereGeometry(handFootRadius, segments, segments / 2); // Geometría para manos/pies
 
     // Geometría para Líneas de Calle
     const lineLength = 0.8;
@@ -255,43 +274,60 @@ const BuildingBackground = ({ isFollowing }) => {
     // Función para crear un Stickman
     function createStickman(material) {
         const group = new THREE.Group();
-        const epsilon = 0.001; // Pequeño offset para evitar z-fighting
+        const epsilon = 0.025; // Mantener epsilon aumentado
 
-        // Torso (el origen estará en la base del torso)
+        // --- Partes del Cuerpo --- 
         const torso = new THREE.Mesh(torsoGeometry, material);
+        const neck = new THREE.Mesh(neckGeometry, material);
+        const head = new THREE.Mesh(headGeometry, material);
+        const leftArm = new THREE.Mesh(limbGeometry, material);
+        const rightArm = new THREE.Mesh(limbGeometry, material);
+        const leftHand = new THREE.Mesh(handFootGeometry, material);
+        const rightHand = new THREE.Mesh(handFootGeometry, material);
+        const leftLeg = new THREE.Mesh(limbGeometry, material);
+        const rightLeg = new THREE.Mesh(limbGeometry, material);
+
+        // --- Posicionamiento --- 
+        // Torso (origen en su base)
         torso.position.y = torsoHeight / 2;
         group.add(torso);
+        
+        // Cuello (sobre el torso)
+        const neckBaseY = torsoHeight; // Base del cuello sobre el torso
+        neck.position.y = neckBaseY + neckHeight / 2; 
+        group.add(neck); 
 
-        // Cabeza
-        const head = new THREE.Mesh(headGeometry, material);
-        head.position.y = torsoHeight + headRadius * 0.9;
+        // Cabeza (sobre el cuello)
+        const headBaseY = neckBaseY + neckHeight; // Base de la cabeza sobre el cuello
+        head.position.y = headBaseY + headRadius; // Posicionar por su centro
         group.add(head);
 
-        // Brazos
-        const armY = torsoHeight * 0.85;
-        const armX = torsoRadius + limbRadius + epsilon; // Añadir epsilon
-        const armZ = 0;
-
-        const leftArm = new THREE.Mesh(limbGeometry, material);
-        leftArm.position.set(-(armX), armY, armZ); // Usar -armX con epsilon
-        leftArm.rotation.z = -Math.PI / 8;
+        // Brazos (adjuntos a la parte superior del torso)
+        const armAttachY = torsoHeight * 0.9; // Punto de unión en Y
+        const armAttachX = torsoRadius + epsilon; // Punto de unión en X (lateral)
+        // Posicionar el brazo (cápsula) por su centro
+        leftArm.position.set(-armAttachX, armAttachY, 0);
+        leftArm.rotation.z = -Math.PI / 8; 
         group.add(leftArm);
-
-        const rightArm = new THREE.Mesh(limbGeometry, material);
-        rightArm.position.set(armX, armY, armZ); // Usar armX con epsilon
+        rightArm.position.set(armAttachX, armAttachY, 0);
         rightArm.rotation.z = Math.PI / 8;
         group.add(rightArm);
+        
+        // Manos (al final de los brazos, AHORA COMO HIJOS)
+        // Posición relativa al centro del brazo
+        const handFootLocalOffsetY = -limbLength / 2; 
+        leftHand.position.y = handFootLocalOffsetY; 
+        leftArm.add(leftHand); // Añadir mano al brazo
+        rightHand.position.y = handFootLocalOffsetY;
+        rightArm.add(rightHand); // Añadir mano al brazo
 
-        // Piernas
-        const legY = limbLength / 2;
-        const legX = torsoRadius + epsilon; // Añadir epsilon
-
-        const leftLeg = new THREE.Mesh(limbGeometry, material);
-        leftLeg.position.set(-(legX), legY, 0); // Usar -legX con epsilon
+        // Piernas (adjuntas a la base del torso)
+        const legAttachY = epsilon; // Ligeramente por encima de la base del torso
+        const legAttachX = torsoRadius + epsilon; // Lateral
+        // Posicionar la pierna (cápsula) por su centro
+        leftLeg.position.set(-legAttachX, legAttachY + limbLength / 2, 0); // Elevar por su longitud/2
         group.add(leftLeg);
-
-        const rightLeg = new THREE.Mesh(limbGeometry, material);
-        rightLeg.position.set(legX, legY, 0); // Usar legX con epsilon
+        rightLeg.position.set(legAttachX, legAttachY + limbLength / 2, 0); 
         group.add(rightLeg);
 
         return group;
@@ -308,7 +344,7 @@ const BuildingBackground = ({ isFollowing }) => {
 
     const lineSegmentSpacing = lineLength * 2.5; // Espacio entre segmentos de línea
     const streetYLevel = 0.01;
-    const lineYLevel = streetYLevel + 0.005; // Ligeramente encima de la calle
+    const lineYLevel = streetYLevel; // MISMA ALTURA que la calle
 
     // Límites para reducir edificios en los bordes
     const centralArea = Math.floor(gridSize * 0.5); // Zona central reducida al 50% (antes 70%)
@@ -536,7 +572,7 @@ const BuildingBackground = ({ isFollowing }) => {
     cityGroup.add(carGroup);
 
     // --- Crear Peatones --- //
-    const pedestrianCount = 150; // Número de peatones
+    const pedestrianCount = 125; // Número de peatones
     const sidewalkOffsetRatio = 0.4; // Qué tan cerca del borde de la calle (0.5 es el borde)
 
     for (let i = 0; i < pedestrianCount; i++) {
@@ -617,6 +653,10 @@ const BuildingBackground = ({ isFollowing }) => {
     const finalLookDirection = new THREE.Vector3(); // Dirección final + offset
     const zeroVector = new THREE.Vector3(0,0,0); // Para comparar
     const lookLerpFactor = 0.06; // Suavidad de la interpolación de mirada
+    const transitionProgressVec = new THREE.Vector3(); // Vector temporal para lerp
+    const transitionLookAtVec = new THREE.Vector3(); // Vector temporal para lookAt lerp
+    // Límite para optimización de peatones en vista aérea
+    const centralAreaWorldLimit = centralArea * spacing; 
 
     const animate = () => {
       animationFrameIdRef.current = requestAnimationFrame(animate);
@@ -624,7 +664,7 @@ const BuildingBackground = ({ isFollowing }) => {
       const elapsedTime = clockRef.current.getElapsedTime();
 
       // --- Control de Visibilidad de Edificios (Optimización Vista Aérea) ---
-      const isAerialView = !followedPedestrianRef.current;
+      const isAerialView = !followedPedestrianRef.current && !isTransitioningCamera.current;
       buildingGroup.children.forEach(building => {
           const zone = building.userData.zone;
           if (isAerialView) {
@@ -638,28 +678,107 @@ const BuildingBackground = ({ isFollowing }) => {
           }
       });
 
-      // --- Movimiento Cámara --- //
-      if (followedPedestrianRef.current) {
+      // --- Control de Visibilidad de Peatones (Optimización Vista Aérea) ---
+      if (pedestrianGroupRef.current) { // Asegurarse que el grupo existe
+          pedestrianGroupRef.current.children.forEach(pedestrian => {
+              if (isAerialView) {
+                  // En vista aérea, comprobar si está dentro de la zona central
+                  const posX = pedestrian.position.x;
+                  const posZ = pedestrian.position.z;
+                  const isInCentralWorldArea = Math.abs(posX) <= centralAreaWorldLimit && Math.abs(posZ) <= centralAreaWorldLimit;
+                  pedestrian.visible = isInCentralWorldArea; // Ocultar si está fuera
+              } else {
+                  // En vista de primera persona o transición, mostrar todos
+                  pedestrian.visible = true;
+              }
+          });
+      }
+
+      // --- Movimiento Cámara (con Transición) --- //
+      if (isTransitioningCamera.current) {
+            const camera = cameraRef.current;
+            const transitionElapsed = elapsedTime - transitionStartTime.current;
+            let progress = Math.min(transitionElapsed / transitionDuration.current, 1.0);
+            // Aplicar easing (opcional, ej. suavizado al inicio/final)
+            progress = progress < 0.5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2; // EaseInOutQuad
+
+            if (pendingFollowTarget.current) {
+                // --- Calcular Destinos Dinámicos --- 
+                const targetPedestrian = pendingFollowTarget.current;
+                
+                // Obtener posición y dirección actual del peatón
+                targetPedestrian.getWorldPosition(transitionTargetPosition.current); // Base para posición y mirada
+                targetPedestrian.getWorldDirection(forwardVec); // Dirección hacia donde mira el peatón
+
+                // Destino para la MIRADA (igual que antes: al peatón, un poco elevado)
+                transitionTargetLookAt.current.copy(transitionTargetPosition.current); // Copiar posición base
+                transitionTargetLookAt.current.y += 0.5; // Elevar punto de mira
+                
+                // Destino para la POSICIÓN (detrás y arriba del peatón)
+                const behindOffset = 2.0; // MÁS CERCA: Cuán atrás (antes -5.0)
+                const upwardOffset = 2.0;  // MÁS CERCA: Cuán arriba (antes 4.0)
+                // Calcular offset en dirección contraria a la que mira el peatón
+                offsetVec.copy(forwardVec).multiplyScalar(behindOffset);
+                offsetVec.y += upwardOffset; // Añadir offset vertical
+                // Añadir offset a la posición actual del peatón para obtener el destino de la cámara
+                transitionTargetPosition.current.add(offsetVec);
+
+                // --- Interpolar hacia Destinos Dinámicos --- 
+                // Interpolar posición desde el inicio hasta el destino dinámico
+                transitionProgressVec.lerpVectors(transitionStartPosition.current, transitionTargetPosition.current, progress);
+                camera.position.copy(transitionProgressVec);
+
+                // Interpolar mirada desde el inicio hasta el destino dinámico
+                transitionLookAtVec.lerpVectors(transitionStartLookAt.current, transitionTargetLookAt.current, progress);
+                camera.lookAt(transitionLookAtVec);
+
+            } else {
+                 // Fallback: Si no hay target, interpola hacia el centro desde las posiciones iniciales
+                 transitionProgressVec.lerpVectors(transitionStartPosition.current, zeroVector, progress);
+                 camera.position.copy(transitionProgressVec);
+                 transitionLookAtVec.lerpVectors(transitionStartLookAt.current, zeroVector, progress);
+                 camera.lookAt(transitionLookAtVec); 
+            }
+
+            // Comprobar si la transición ha terminado
+            if (progress >= 1.0) {
+                isTransitioningCamera.current = false;
+                // Iniciar seguimiento real
+                followedPedestrianRef.current = pendingFollowTarget.current;
+                pendingFollowTarget.current = null; // Limpiar
+                // Resetear estado de mirada para el nuevo seguimiento
+                isLookingAround.current = false;
+                currentLookOffset.current.set(0,0,0);
+                targetLookOffset.current.set(0,0,0);
+                nextLookAroundTime.current = elapsedTime + lookAroundParams.pauseMin; 
+            }
+      } else if (followedPedestrianRef.current) {
+        // --- Lógica de Seguimiento Normal (existente) --- //
         const pedestrian = followedPedestrianRef.current;
         const camera = cameraRef.current;
 
-        // --- Calcular Posición Cámara (igual que antes) ---
-        pedestrian.getWorldPosition(targetPositionVec);
-        const headHeight = torsoHeight + headRadius * 0.9;
-        offsetVec.set(0, headHeight, 0.1);
+        // Calcular Posición Cámara (ligeramente delante de la cabeza)
+        pedestrian.getWorldPosition(targetPositionVec); // Posición base del peatón (pies)
+        // Calcular la altura de la cabeza relativa a la base del peatón
+        const headWorldY = torsoHeight + neckHeight + headRadius; 
+        // Offset para la posición de la cámara: altura Y y MUY POCO en Z local (adelante)
+        const forwardOffset = 0.02; // Valor muy pequeño para estar justo delante
+        offsetVec.set(0, headWorldY, forwardOffset); 
+        // Aplicar la rotación del peatón AL OFFSET COMPLETO
         offsetVec.applyQuaternion(pedestrian.quaternion);
-        cameraPositionVec.copy(targetPositionVec).add(offsetVec);
-        camera.position.lerp(cameraPositionVec, 0.15);
+        // Sumar el offset rotado a la posición base
+        cameraPositionVec.copy(targetPositionVec).add(offsetVec); 
+        // Mantener lerp rápido
+        camera.position.lerp(cameraPositionVec, 0.85);
 
-        // --- Calcular Dirección Base de Mirada (Adelante y Arriba) --- //
-        forwardVec.set(0, 0, 1); // Vector hacia adelante local del peatón
-        forwardVec.applyQuaternion(pedestrian.quaternion);
+        // Calcular Dirección Base de Mirada (directamente hacia adelante)
+        forwardVec.set(0, 0, 1); // Vector Z local (adelante)
+        forwardVec.applyQuaternion(pedestrian.quaternion); // Rotar según orientación del peatón
         baseLookDirection.copy(forwardVec);
-        baseLookDirection.y += 0.3; // Mirar más arriba por defecto (ajusta este valor)
-        baseLookDirection.normalize();
+        // baseLookDirection.y += 0.3; // ELIMINADO: Ya no miramos hacia arriba por defecto
+        // baseLookDirection.normalize(); // No es necesario normalizar si partimos de (0,0,1) y solo rotamos
 
-        // --- Lógica de Movimiento de Cabeza --- //
-        // Decidir si iniciar una nueva mirada
+        // Lógica de Movimiento de Cabeza (existente, ahora se aplica sobre la mirada recta)
         if (!isLookingAround.current && elapsedTime >= nextLookAroundTime.current) {
             if (Math.random() < 0.6) { // 60% de probabilidad de mirar
                 isLookingAround.current = true;
@@ -677,7 +796,7 @@ const BuildingBackground = ({ isFollowing }) => {
             }
         }
 
-        // Interpolar la mirada y gestionar fases
+        // Interpolar la mirada y gestionar fases (existente)
         if (isLookingAround.current) {
             currentLookOffset.current.lerp(targetLookOffset.current, lookLerpFactor);
 
@@ -700,21 +819,16 @@ const BuildingBackground = ({ isFollowing }) => {
              currentLookOffset.current.lerp(zeroVector, lookLerpFactor * 2.0); // Doble velocidad para volver
         }
 
-        // --- Aplicar Mirada Final --- //
-        // Rotar la dirección base según el offset actual (simplificado)
-        // NOTA: Esto es una aproximación. Una rotación correcta usaría cuaterniones.
+        // Aplicar Mirada Final (existente)
         finalLookDirection.copy(baseLookDirection);
-        // Aplicar offset horizontal como rotación Y aproximada
         finalLookDirection.applyAxisAngle(new THREE.Vector3(0, 1, 0), currentLookOffset.current.x);
-        // Aplicar offset vertical como rotación X local aproximada
-        const rightVec = new THREE.Vector3().crossVectors(camera.up, finalLookDirection).normalize(); // Vector derecha local
+        const rightVec = new THREE.Vector3().crossVectors(camera.up, finalLookDirection).normalize(); 
         finalLookDirection.applyAxisAngle(rightVec, currentLookOffset.current.y);
-
         lookAtPositionVec.copy(camera.position).add(finalLookDirection);
         camera.lookAt(lookAtPositionVec);
 
       } else {
-        // --- Movimiento Cámara Original --- //
+        // --- Movimiento Cámara Original (Vista Aérea Estática) --- //
         const camera = cameraRef.current;
         if (originalCameraPos.current && camera) { 
             const basePosX = originalCameraPos.current.x;
@@ -748,17 +862,31 @@ const BuildingBackground = ({ isFollowing }) => {
       const limit = groundSize * 0.5;
       if (pedestrianGroupRef.current) { // Check if ref is populated
             pedestrianGroupRef.current.children.forEach((pedestrian, index) => {
+                // Calcular un offset basado en UUID para desincronizar animaciones
                 let uuidOffset = 0;
                 for(let charIndex = 0; charIndex < Math.min(pedestrian.uuid.length, 6); charIndex++) {
                     uuidOffset += pedestrian.uuid.charCodeAt(charIndex);
                 }
-                const legMovement = Math.sin(elapsedTime * 10 + uuidOffset) * 0.4;
+                
+                // Movimiento de Piernas
+                const legMovement = Math.sin(elapsedTime * 10 + uuidOffset) * 0.4; // Amplitud 0.4
                 const children = pedestrian.children;
-                const leftLeg = children[4];
-                const rightLeg = children[5];
+                const leftLeg = children[5]; // Índice CORREGIDO para leftLeg
+                const rightLeg = children[6]; // Índice CORREGIDO para rightLeg
                 if (leftLeg) leftLeg.rotation.x = legMovement;
-                if (rightLeg) rightLeg.rotation.x = -legMovement;
+                if (rightLeg) rightLeg.rotation.x = -legMovement; // Movimiento opuesto
+
+                // Movimiento de Brazos (índices 3 y 4 son correctos)
+                const armMovement = Math.sin(elapsedTime * 10 + uuidOffset + Math.PI) * 0.3; // Desfasado (PI) y amplitud 0.3
+                const leftArm = children[3]; // Índice correcto para leftArm
+                const rightArm = children[4]; // Índice correcto para rightArm
+                if (leftArm) leftArm.rotation.x = armMovement;
+                if (rightArm) rightArm.rotation.x = -armMovement; // Movimiento opuesto
+
+                // Movimiento general del peatón (traslación)
                 pedestrian.translateZ(Math.abs(pedestrian.userData.speed));
+                
+                // Lógica de reposicionamiento (sin cambios)
                 const pos = pedestrian.position;
                 const needsRepositionX = pedestrian.userData.isHorizontal && Math.abs(pos.x) > limit;
                 const needsRepositionZ = !pedestrian.userData.isHorizontal && Math.abs(pos.z) > limit;
@@ -840,26 +968,42 @@ const BuildingBackground = ({ isFollowing }) => {
 
   // --- Efecto para manejar isFollowing --- //
   useEffect(() => {
-    if (isFollowing && pedestrianGroupRef.current && pedestrianGroupRef.current.children.length > 0) {
+    if (isFollowing && pedestrianGroupRef.current && pedestrianGroupRef.current.children.length > 0 && !isTransitioningCamera.current && !followedPedestrianRef.current) {
+      // Selección de peatón y preparación de transición
       const pedestrians = pedestrianGroupRef.current.children;
       const randomIndex = Math.floor(Math.random() * pedestrians.length);
-      followedPedestrianRef.current = pedestrians[randomIndex];
-      if (cameraRef.current) {
-           if (!followedPedestrianRef.current) { 
-               originalCameraPos.current.copy(cameraRef.current.position);
-           } 
-      }
-      // Resetear estado de mirada al empezar a seguir
-      isLookingAround.current = false;
-      currentLookOffset.current.set(0,0,0);
-      targetLookOffset.current.set(0,0,0);
-      // Asegurarse que clockRef.current existe antes de usarlo
-      if (clockRef.current) {
-        nextLookAroundTime.current = clockRef.current.getElapsedTime() + lookAroundParams.pauseMin; // Usar ref
+      const targetPedestrian = pedestrians[randomIndex];
+      
+      if (cameraRef.current && targetPedestrian && clockRef.current) {
+          // Guardar estado actual como inicio de transición
+          transitionStartPosition.current.copy(cameraRef.current.position);
+          // Calcular un punto inicial para mirar (podría ser el centro de la ciudad o el target lejano)
+          transitionStartLookAt.current.copy(cameraRef.current.getWorldDirection(new THREE.Vector3()).multiplyScalar(10).add(cameraRef.current.position));
+          
+          // Ya no precalculamos la posición objetivo aquí, se hará dinámicamente
+          // targetPedestrian.getWorldPosition(transitionTargetPosition.current);
+          // transitionTargetPosition.current.y += 3.0; 
+          
+          // Guardar el peatón que seguiremos DESPUÉS
+          pendingFollowTarget.current = targetPedestrian;
+          
+          // Iniciar la transición
+          isTransitioningCamera.current = true;
+          transitionStartTime.current = clockRef.current.getElapsedTime();
+          followedPedestrianRef.current = null; // Asegurarse que no estamos siguiendo todavía
       }
 
-    } else {
-      followedPedestrianRef.current = null; // Dejar de seguir si isFollowing es false
+    } else if (!isFollowing) {
+      // Si se cancela el seguimiento (isFollowing = false)
+      followedPedestrianRef.current = null; // Dejar de seguir
+      isTransitioningCamera.current = false; // Cancelar transición si estaba ocurriendo
+      pendingFollowTarget.current = null; // Limpiar objetivo pendiente
+      // Volver a la cámara original (quizás con otra transición suave)
+      // Por ahora, salto directo:
+      if (cameraRef.current) {
+          cameraRef.current.position.copy(originalCameraPos.current);
+          cameraRef.current.lookAt(0, 1, 0);
+      }
     }
   }, [isFollowing]);
 
