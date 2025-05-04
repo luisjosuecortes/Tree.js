@@ -699,61 +699,72 @@ const BuildingBackground = ({ isFollowing }) => {
             const camera = cameraRef.current;
             const transitionElapsed = elapsedTime - transitionStartTime.current;
             let progress = Math.min(transitionElapsed / transitionDuration.current, 1.0);
-            // Aplicar easing (opcional, ej. suavizado al inicio/final)
             progress = progress < 0.5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2; // EaseInOutQuad
 
             if (pendingFollowTarget.current) {
-                // --- Calcular Destinos Dinámicos --- 
+                // --- TRANSICIÓN HACIA PEATÓN (EXISTENTE, SIN CAMBIOS) ---
                 const targetPedestrian = pendingFollowTarget.current;
-                
-                // Obtener posición y dirección actual del peatón
-                targetPedestrian.getWorldPosition(transitionTargetPosition.current); // Base para posición y mirada
-                targetPedestrian.getWorldDirection(forwardVec); // Dirección hacia donde mira el peatón
-
-                // Destino para la MIRADA (igual que antes: al peatón, un poco elevado)
-                transitionTargetLookAt.current.copy(transitionTargetPosition.current); // Copiar posición base
-                transitionTargetLookAt.current.y += 0.5; // Elevar punto de mira
-                
-                // Destino para la POSICIÓN (detrás y arriba del peatón)
-                const behindOffset = 2.0; // MÁS CERCA: Cuán atrás (antes -5.0)
-                const upwardOffset = 2.0;  // MÁS CERCA: Cuán arriba (antes 4.0)
-                // Calcular offset en dirección contraria a la que mira el peatón
+                targetPedestrian.getWorldPosition(transitionTargetPosition.current);
+                targetPedestrian.getWorldDirection(forwardVec);
+                transitionTargetLookAt.current.copy(transitionTargetPosition.current);
+                transitionTargetLookAt.current.y += 0.5;
+                const behindOffset = 2.0;
+                const upwardOffset = 2.0;
                 offsetVec.copy(forwardVec).multiplyScalar(behindOffset);
-                offsetVec.y += upwardOffset; // Añadir offset vertical
-                // Añadir offset a la posición actual del peatón para obtener el destino de la cámara
+                offsetVec.y += upwardOffset;
                 transitionTargetPosition.current.add(offsetVec);
-
-                // --- Interpolar hacia Destinos Dinámicos --- 
-                // Interpolar posición desde el inicio hasta el destino dinámico
                 transitionProgressVec.lerpVectors(transitionStartPosition.current, transitionTargetPosition.current, progress);
                 camera.position.copy(transitionProgressVec);
-
-                // Interpolar mirada desde el inicio hasta el destino dinámico
                 transitionLookAtVec.lerpVectors(transitionStartLookAt.current, transitionTargetLookAt.current, progress);
                 camera.lookAt(transitionLookAtVec);
 
             } else {
-                 // Fallback: Si no hay target, interpola hacia el centro desde las posiciones iniciales
-                 transitionProgressVec.lerpVectors(transitionStartPosition.current, zeroVector, progress);
-                 camera.position.copy(transitionProgressVec);
-                 transitionLookAtVec.lerpVectors(transitionStartLookAt.current, zeroVector, progress);
-                 camera.lookAt(transitionLookAtVec); 
+                // --- TRANSICIÓN DE VUELTA A VISTA AÉREA (MODIFICADO) --- 
+                // Calcular la posición final dinámica de la vista aérea
+                const aerialTargetPos = new THREE.Vector3();
+                const basePosX = originalCameraPos.current.x;
+                const basePosZ = originalCameraPos.current.z;
+                // Usar el tiempo actual para calcular dónde debería estar la cámara aérea
+                aerialTargetPos.x = basePosX + Math.sin(elapsedTime * 0.04) * 10;
+                aerialTargetPos.z = basePosZ + Math.cos(elapsedTime * 0.04) * 10;
+                aerialTargetPos.y = originalCameraPos.current.y;
+                
+                const targetLookAt = new THREE.Vector3(0, 1, 0); // Mirar al centro
+
+                // Interpolar hacia Destinos Dinámicos (vista aérea en movimiento)
+                transitionProgressVec.lerpVectors(transitionStartPosition.current, aerialTargetPos, progress);
+                camera.position.copy(transitionProgressVec);
+                transitionLookAtVec.lerpVectors(transitionStartLookAt.current, targetLookAt, progress);
+                camera.lookAt(transitionLookAtVec);
             }
 
             // Comprobar si la transición ha terminado
             if (progress >= 1.0) {
                 isTransitioningCamera.current = false;
-                // Iniciar seguimiento real
-                followedPedestrianRef.current = pendingFollowTarget.current;
-                pendingFollowTarget.current = null; // Limpiar
-                // Resetear estado de mirada para el nuevo seguimiento
-                isLookingAround.current = false;
-                currentLookOffset.current.set(0,0,0);
-                targetLookOffset.current.set(0,0,0);
-                nextLookAroundTime.current = elapsedTime + lookAroundParams.pauseMin; 
+                if (pendingFollowTarget.current) {
+                    // Si había un objetivo, iniciar seguimiento real (sin cambios)
+                    followedPedestrianRef.current = pendingFollowTarget.current;
+                    pendingFollowTarget.current = null;
+                    isLookingAround.current = false;
+                    currentLookOffset.current.set(0,0,0);
+                    targetLookOffset.current.set(0,0,0);
+                    nextLookAroundTime.current = elapsedTime + lookAroundParams.pauseMin;
+                } else {
+                    // Si no había objetivo, la transición a vista aérea ha terminado.
+                    // Asegurarse de que la cámara esté EXACTAMENTE en la posición/orientación final
+                    // Calculamos de nuevo la posición final para este instante
+                    const finalAerialPos = new THREE.Vector3();
+                    const basePosX = originalCameraPos.current.x;
+                    const basePosZ = originalCameraPos.current.z;
+                    finalAerialPos.x = basePosX + Math.sin(elapsedTime * 0.04) * 10;
+                    finalAerialPos.z = basePosZ + Math.cos(elapsedTime * 0.04) * 10;
+                    finalAerialPos.y = originalCameraPos.current.y;
+                    camera.position.copy(finalAerialPos); // Establecer posición final exacta
+                    camera.lookAt(0, 1, 0); // Establecer mirada final exacta
+                }
             }
       } else if (followedPedestrianRef.current) {
-        // --- Lógica de Seguimiento Normal (existente) --- //
+        // --- Lógica de Seguimiento Normal (existente, sin cambios) --- //
         const pedestrian = followedPedestrianRef.current;
         const camera = cameraRef.current;
 
@@ -762,14 +773,14 @@ const BuildingBackground = ({ isFollowing }) => {
         // Calcular la altura de la cabeza relativa a la base del peatón
         const headWorldY = torsoHeight + neckHeight + headRadius; 
         // Offset para la posición de la cámara: altura Y y MUY POCO en Z local (adelante)
-        const forwardOffset = 0.02; // Valor muy pequeño para estar justo delante
+        const forwardOffset = 0.5; // Aumentado ligeramente para evitar clipping
         offsetVec.set(0, headWorldY, forwardOffset); 
         // Aplicar la rotación del peatón AL OFFSET COMPLETO
         offsetVec.applyQuaternion(pedestrian.quaternion);
         // Sumar el offset rotado a la posición base
         cameraPositionVec.copy(targetPositionVec).add(offsetVec); 
         // Mantener lerp rápido
-        camera.position.lerp(cameraPositionVec, 0.85);
+        camera.position.lerp(cameraPositionVec, 0.06); // Valor mucho más bajo (antes 0.85)
 
         // Calcular Dirección Base de Mirada (directamente hacia adelante)
         forwardVec.set(0, 0, 1); // Vector Z local (adelante)
@@ -968,43 +979,57 @@ const BuildingBackground = ({ isFollowing }) => {
 
   // --- Efecto para manejar isFollowing --- //
   useEffect(() => {
+    const camera = cameraRef.current; // Cachear cámara
+    const clock = clockRef.current; // Cachear clock
+
     if (isFollowing && pedestrianGroupRef.current && pedestrianGroupRef.current.children.length > 0 && !isTransitioningCamera.current && !followedPedestrianRef.current) {
-      // Selección de peatón y preparación de transición
+      // --- SELECCIÓN DE PEATÓN E INICIO DE TRANSICIÓN HACIA ÉL ---
       const pedestrians = pedestrianGroupRef.current.children;
       const randomIndex = Math.floor(Math.random() * pedestrians.length);
       const targetPedestrian = pedestrians[randomIndex];
       
-      if (cameraRef.current && targetPedestrian && clockRef.current) {
+      if (camera && targetPedestrian && clock) {
           // Guardar estado actual como inicio de transición
-          transitionStartPosition.current.copy(cameraRef.current.position);
-          // Calcular un punto inicial para mirar (podría ser el centro de la ciudad o el target lejano)
-          transitionStartLookAt.current.copy(cameraRef.current.getWorldDirection(new THREE.Vector3()).multiplyScalar(10).add(cameraRef.current.position));
+          transitionStartPosition.current.copy(camera.position);
+          // Calcular punto de mira actual para inicio de transición
+          const currentLookAt = new THREE.Vector3();
+          camera.getWorldDirection(currentLookAt).multiplyScalar(10).add(camera.position);
+          transitionStartLookAt.current.copy(currentLookAt);
           
-          // Ya no precalculamos la posición objetivo aquí, se hará dinámicamente
-          // targetPedestrian.getWorldPosition(transitionTargetPosition.current);
-          // transitionTargetPosition.current.y += 3.0; 
-          
-          // Guardar el peatón que seguiremos DESPUÉS
+          // Guardar el peatón que seguiremos DESPUÉS de la transición
           pendingFollowTarget.current = targetPedestrian;
           
           // Iniciar la transición
           isTransitioningCamera.current = true;
-          transitionStartTime.current = clockRef.current.getElapsedTime();
+          transitionStartTime.current = clock.getElapsedTime();
           followedPedestrianRef.current = null; // Asegurarse que no estamos siguiendo todavía
       }
 
-    } else if (!isFollowing) {
-      // Si se cancela el seguimiento (isFollowing = false)
-      followedPedestrianRef.current = null; // Dejar de seguir
-      isTransitioningCamera.current = false; // Cancelar transición si estaba ocurriendo
-      pendingFollowTarget.current = null; // Limpiar objetivo pendiente
-      // Volver a la cámara original (quizás con otra transición suave)
-      // Por ahora, salto directo:
-      if (cameraRef.current) {
-          cameraRef.current.position.copy(originalCameraPos.current);
-          cameraRef.current.lookAt(0, 1, 0);
+    } else if (!isFollowing && (followedPedestrianRef.current || pendingFollowTarget.current || isTransitioningCamera.current) && camera && clock) {
+        // --- INICIO DE TRANSICIÓN DE VUELTA A VISTA AÉREA ---
+        // Solo iniciar si estábamos siguiendo, esperando seguir, o en medio de una transición
+        
+        console.log("Iniciando transición de vuelta a vista aérea...");
+
+        // Guardar estado actual como inicio de transición
+        transitionStartPosition.current.copy(camera.position);
+        // Calcular punto de mira actual para inicio de transición
+        const currentLookAt = new THREE.Vector3();
+        camera.getWorldDirection(currentLookAt).multiplyScalar(10).add(camera.position);
+        transitionStartLookAt.current.copy(currentLookAt);
+
+        // Borrar cualquier objetivo de seguimiento pendiente o activo
+        followedPedestrianRef.current = null;
+        pendingFollowTarget.current = null;
+
+        // Iniciar la transición (sin target específico, se detectará en animate)
+        isTransitioningCamera.current = true;
+        transitionStartTime.current = clock.getElapsedTime();
+        
+        // NO restaurar la cámara directamente aquí, la transición se encargará
+        // camera.position.copy(originalCameraPos.current);
+        // camera.lookAt(0, 1, 0);
       }
-    }
   }, [isFollowing]);
 
   return <div ref={mountRef} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: -1 }} />;

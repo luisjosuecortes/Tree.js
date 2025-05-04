@@ -1,6 +1,6 @@
 'use client'; // Marcar como Componente de Cliente
 
-import React, { useState, useCallback } from "react"; // Importar useState y useCallback
+import React, { useState, useCallback, useEffect } from "react"; // Importar useState, useCallback y useEffect
 import dynamic from 'next/dynamic';
 
 // Importar dinámicamente el componente BuildingBackground (anteriormente GradientBackground) sin SSR
@@ -31,6 +31,52 @@ export default function Home() {
   const handleStartFollow = useCallback(() => {
     setIsFollowingPedestrian(true);
   }, []); // Sin dependencias, solo se crea una vez
+
+  // --- Efecto para Pantalla Completa con Doble Toque ---
+  useEffect(() => {
+    const handleDoubleClick = () => {
+      const elem = document.documentElement; // Elemento raíz (HTML)
+      if (!document.fullscreenElement) {
+        // Si no estamos en pantalla completa, intentar entrar
+        elem.requestFullscreen().catch((err) => {
+          console.error(`Error al intentar activar pantalla completa: ${err.message} (${err.name})`);
+        });
+      } else {
+        // Opcional: Si ya estamos en pantalla completa, salir con doble toque
+        // if (document.exitFullscreen) {
+        //   document.exitFullscreen();
+        // }
+      }
+    };
+
+    // Añadir listener a la ventana
+    window.addEventListener('dblclick', handleDoubleClick);
+
+    // Limpieza: remover el listener cuando el componente se desmonte
+    return () => {
+      window.removeEventListener('dblclick', handleDoubleClick);
+    };
+  }, []); // Array vacío: ejecutar solo una vez al montar
+
+  // --- Efecto para Tecla Escape ---
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Si se presiona Escape Y estamos siguiendo a un peatón
+      if (event.key === 'Escape' && isFollowingPedestrian) {
+        console.log("Escape presionado, volviendo a vista aérea...");
+        setIsFollowingPedestrian(false); // Cambiar el estado para detener el seguimiento
+      }
+    };
+
+    // Añadir listener a la ventana
+    window.addEventListener('keydown', handleKeyDown);
+
+    // Limpieza: remover el listener
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+    // Dependencia: isFollowingPedestrian para que el callback capture su valor actual
+  }, [isFollowingPedestrian]);
 
   return (
     <div className="min-h-screen w-full relative"> {/* Contenedor principal relativo */}
