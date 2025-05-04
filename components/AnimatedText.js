@@ -34,7 +34,7 @@ const AnimatedText = () => {
       {/* Nuevo párrafo descriptivo similar al de la imagen */}
       <div style={{
         color: 'white',
-        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontFamily: 'monospace', /* Cambiado a tipografía monoespaciada como en la imagen */
         fontSize: '1.2rem',
         fontWeight: '400',
         marginTop: '2.5rem',
@@ -45,7 +45,7 @@ const AnimatedText = () => {
         textShadow: '1px 1px 2px rgba(0,0,0,0.3)'
       }}>
         <p>
-          Notas y codigo de mis proyectos con THREE.JS
+          Notas y proyectos de <a href="https://twitter.com/luiscortespn" target="_blank" rel="noopener noreferrer" style={{color: '#aaaaff', textDecoration: 'underline'}}>@luiscortespenguin</a> con THREE.JS
         </p>
       </div>
     </div>
