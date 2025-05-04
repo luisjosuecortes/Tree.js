@@ -15,7 +15,10 @@ const BuildingBackground = () => {
 
     // --- Escena ---
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x000000, 0.03); // Niebla negra para profundidad
+    // scene.fog = new THREE.FogExp2(0x000000, 0.03); // Niebla exponencial negra
+    // Usar niebla lineal para un resplandor/color de fondo gradual
+    // Hacer el color más oscuro y el rango más lejano para un efecto muy sutil
+    scene.fog = new THREE.Fog(0x040408, 80, 300); // Color casi negro, empieza a los 80, total a los 300 (antes 0x080818, 50, 200)
 
     // --- Cámara Perspectiva ---
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -25,7 +28,8 @@ const BuildingBackground = () => {
     // --- Renderizador y Composer ---
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(0x000000); // Fondo negro base
+    // Establecer clearColor al mismo color base de la niebla para transición suave
+    renderer.setClearColor(0x040408); // Color casi negro (antes 0x080818)
     renderer.domElement.style.position = 'fixed';
     renderer.domElement.style.top = '0';
     renderer.domElement.style.left = '0';
@@ -36,9 +40,9 @@ const BuildingBackground = () => {
 
     const bloomPass = new UnrealBloomPass(
         new THREE.Vector2(window.innerWidth, window.innerHeight),
-        1.8, // strength - Más intensidad (antes 1.6)
+        1.2, // strength - Menos intensidad (antes 1.8)
         0.6, // radius - Mantenemos radio
-        0.65 // threshold - Umbral más bajo (antes 0.7)
+        0.7  // threshold - Umbral un poco más alto (antes 0.65)
     );
     // Ajustar valores si es necesario:
     // bloomPass.threshold = 0.8; 
@@ -50,11 +54,14 @@ const BuildingBackground = () => {
     composer.addPass(bloomPass);
 
     // --- Luces ---
-    const ambientLight = new THREE.AmbientLight(0x505050, 1.0); // Aumentar un poco la ambiental
+    const ambientLight = new THREE.AmbientLight(0x606070, 1.5); // Mantenemos ambiental
     scene.add(ambientLight);
-    const directionalLight = new THREE.DirectionalLight(0x88aaff, 0.6); // Aumentar direccional también
-    directionalLight.position.set(8, 15, 10);
+    const directionalLight = new THREE.DirectionalLight(0xa0b0ff, 1.0); // Más intensidad y color ajustado (antes 0x90a0ff, 0.8)
+    directionalLight.position.set(20, 40, -100); // Posición alta/lejana, similar a la luna (antes 8, 15, 10)
+    directionalLight.target.position.set(0, 0, 0); // Asegurar que apunta al centro
     scene.add(directionalLight);
+    scene.add(directionalLight.target); // Es necesario añadir el target a la escena si se mueve
+    
     // const pointLight = new THREE.PointLight(0xffcc88, 0.5); // Quitar la puntual general?
     // pointLight.position.set(-8, 6, 8);
     // scene.add(pointLight);
@@ -80,6 +87,17 @@ const BuildingBackground = () => {
     const pedestrianMaterials = pedestrianColors.map(color => new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0.2 }));
     // Material para Líneas de Calle
     const streetLineMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+    // Material para la Luna
+    const moonMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false }); // Añadir fog: false
+    // Material para Estrellas
+    const starMaterial = new THREE.PointsMaterial({
+        size: 1.5, // Tamaño de las estrellas (en píxeles)
+        sizeAttenuation: false, // Tamaño constante sin importar distancia
+        vertexColors: true, // Usar colores definidos por vértice
+        fog: false, // Ignorar niebla
+        blending: THREE.AdditiveBlending, // Efecto de brillo al superponerse
+        depthWrite: false // Para que no se oculten estrictamente unas a otras
+    });
 
     // --- Geometrías ---
     const buildingGeometry = new THREE.BoxGeometry(1, 1, 1);
@@ -116,6 +134,48 @@ const BuildingBackground = () => {
     const lineLength = 0.8;
     const lineWidth = 0.05;
     const streetLineGeometry = new THREE.PlaneGeometry(lineLength, lineWidth);
+    // Geometría para la Luna
+    const moonRadius = 12; // Más grande (antes 8)
+    const moonGeometry = new THREE.SphereGeometry(moonRadius, 32, 16);
+    // Geometría para Estrellas
+    const starGeometry = new THREE.BufferGeometry();
+    const starCount = 400; // Número de estrellas (mucho menor, antes 7000)
+    const starPositions = new Float32Array(starCount * 3);
+    const starColors = new Float32Array(starCount * 3);
+    const starFieldRadius = 800; // Radio de la esfera de estrellas
+
+    for (let i = 0; i < starCount; i++) {
+        // Posición en esfera usando coordenadas esféricas
+        const phi = Math.acos(-1 + (2 * Math.random())); // Distribución uniforme en esfera
+        const theta = Math.sqrt(starCount * Math.PI) * phi; // Otra forma de distribución (Phyllotaxis)
+        // O usar theta aleatorio simple: const theta = Math.random() * 2 * Math.PI;
+
+        const x = starFieldRadius * Math.sin(phi) * Math.cos(theta);
+        const y = starFieldRadius * Math.sin(phi) * Math.sin(theta);
+        const z = starFieldRadius * Math.cos(phi);
+
+        starPositions[i * 3] = x;
+        starPositions[i * 3 + 1] = y;
+        starPositions[i * 3 + 2] = z;
+
+        // Color base blanco, con ligera variación
+        const baseColor = new THREE.Color(0xffffff);
+        const variance = Math.random();
+        if (variance < 0.1) { // 10% ligeramente azuladas
+            baseColor.lerp(new THREE.Color(0xccccff), 0.3);
+        } else if (variance < 0.2) { // 10% ligeramente amarillentas
+            baseColor.lerp(new THREE.Color(0xffffcc), 0.3);
+        }
+        // Añadir ligera variación de brillo
+        const brightness = 0.8 + Math.random() * 0.2;
+        baseColor.multiplyScalar(brightness);
+
+        starColors[i * 3] = baseColor.r;
+        starColors[i * 3 + 1] = baseColor.g;
+        starColors[i * 3 + 2] = baseColor.b;
+    }
+    starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+    starGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
 
     // --- Helper Functions ---
     function createStreetLight(x, z) {
@@ -440,6 +500,16 @@ const BuildingBackground = () => {
 
     scene.add(cityGroup); // Añadir ciudad a la escena
 
+    // --- Crear Luna --- //
+    const moon = new THREE.Mesh(moonGeometry, moonMaterial);
+    // moon.material.fog = false; // Aplicado directamente en la definición del material
+    moon.position.set(50, 100, -400); // Posición lejana y alta
+    scene.add(moon); // Añadir directamente a la escena, no al cityGroup
+
+    // --- Crear Estrellas --- //
+    const stars = new THREE.Points(starGeometry, starMaterial);
+    scene.add(stars); // Añadir directamente a la escena
+
     // --- Suelo --- //
     const groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
     groundPlane.rotation.x = -Math.PI / 2;
@@ -571,14 +641,26 @@ const BuildingBackground = () => {
         torsoGeometry.dispose();
         limbGeometry.dispose();
         streetLineGeometry.dispose(); // Disponer geometría de línea
+        moonGeometry.dispose(); // Disponer geometría de la luna
+        starGeometry.dispose(); // Disponer geometría de estrellas
 
         scene.remove(...scene.children);
+        scene.remove(ambientLight);
+        scene.remove(directionalLight);
+        scene.remove(directionalLight.target);
+        scene.remove(moon);
+        scene.remove(stars); // Remover estrellas
+        scene.remove(cityGroup); // Remover el grupo principal
+        scene.remove(groundPlane);
+
         ambientLight.dispose();
         directionalLight.dispose();
         renderer.dispose();
         composer.dispose();
         bloomPass.dispose();
         renderScene.dispose();
+        moonMaterial.dispose(); // Disponer material de la luna
+        starMaterial.dispose(); // Disponer material de estrellas
     };
   }, []);
 
