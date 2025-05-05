@@ -2,7 +2,13 @@ import React from 'react';
 
 const AnimatedText = ({ onStartFollow }) => {
   return (
-    <div className="flex flex-col items-center justify-center h-screen absolute top-0 left-0 w-full" style={{ zIndex: 1 }}>
+    <div className="flex flex-col items-center justify-center h-screen absolute top-0 left-0 w-full" style={{ 
+        zIndex: 1, 
+        userSelect: 'none', // Añadir esta línea para prevenir selección
+        WebkitUserSelect: 'none', // Prefijo para Safari
+        MozUserSelect: 'none', // Prefijo para Firefox
+        msUserSelect: 'none' // Prefijo para IE/Edge
+    }}>
       <h1 style={{
         color: 'white',
         fontFamily: 'Arial, Helvetica, sans-serif',

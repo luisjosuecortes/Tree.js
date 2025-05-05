@@ -4,7 +4,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 
-const BuildingBackground = ({ isFollowing }) => {
+const BuildingBackground = ({ isFollowing, onFirstPersonViewReady }) => {
   const mountRef = useRef(null);
   const cameraRef = useRef(); // Referencia para la cámara
   const pedestrianGroupRef = useRef(); // Referencia para el grupo de peatones
@@ -749,6 +749,12 @@ const BuildingBackground = ({ isFollowing }) => {
                     currentLookOffset.current.set(0,0,0);
                     targetLookOffset.current.set(0,0,0);
                     nextLookAroundTime.current = elapsedTime + lookAroundParams.pauseMin;
+                    
+                    // ¡Llamar al callback para indicar que la vista 1ra persona está lista!
+                    if (onFirstPersonViewReady) {
+                        console.log("[BuildingBackground] Llamando a onFirstPersonViewReady...");
+                        onFirstPersonViewReady();
+                    }
                 } else {
                     // Si no había objetivo, la transición a vista aérea ha terminado.
                     // Asegurarse de que la cámara esté EXACTAMENTE en la posición/orientación final

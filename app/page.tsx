@@ -15,6 +15,12 @@ const AnimatedText = dynamic(() => import('../components/AnimatedText'), {
   loading: () => null // No mostrar nada mientras carga el texto
 });
 
+// Importar dinámicamente el componente AnimatedTablet sin SSR
+const AnimatedTablet = dynamic(() => import('../components/AnimatedTablet'), {
+    ssr: false,
+    loading: () => null // No mostrar nada mientras carga la tablet
+});
+
 // Importar dinámicamente el componente ParticleSystem sin SSR (Comentado)
 /*
 const ParticleSystem = dynamic(() => import('../components/ParticleSystem'), {
@@ -26,11 +32,20 @@ const ParticleSystem = dynamic(() => import('../components/ParticleSystem'), {
 export default function Home() {
   // Estado para controlar si la cámara está siguiendo a un peatón
   const [isFollowingPedestrian, setIsFollowingPedestrian] = useState(false);
+  // Nuevo estado para controlar la visibilidad de la tablet (solo después de la transición)
+  const [tabletVisible, setTabletVisible] = useState(false);
 
   // Función para iniciar el seguimiento (envuelta en useCallback para estabilidad)
   const handleStartFollow = useCallback(() => {
     setIsFollowingPedestrian(true);
+    // setTabletVisible(false); // Asegurarse de que la tablet no se muestre al inicio
   }, []); // Sin dependencias, solo se crea una vez
+
+  // Callback para que BuildingBackground nos avise que la vista 1ra persona está lista
+  const handleFirstPersonViewReady = useCallback(() => {
+    console.log("Transición a primera persona completada, mostrando tablet.");
+    setTabletVisible(true);
+  }, []);
 
   // --- Efecto para Pantalla Completa con Doble Toque ---
   useEffect(() => {
@@ -58,15 +73,21 @@ export default function Home() {
     };
   }, []); // Array vacío: ejecutar solo una vez al montar
 
-  // --- Efecto para Tecla Escape ---
+  // --- Efecto para Tecla Escape y cambio de isFollowingPedestrian ---
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       // Si se presiona Escape Y estamos siguiendo a un peatón
       if (event.key === 'Escape' && isFollowingPedestrian) {
         console.log("Escape presionado, volviendo a vista aérea...");
-        setIsFollowingPedestrian(false); // Cambiar el estado para detener el seguimiento
+        setIsFollowingPedestrian(false);
+        setTabletVisible(false); // Ocultar la tablet al presionar Escape
       }
     };
+
+    // Ocultar tablet si isFollowingPedestrian se vuelve false por cualquier motivo
+    if (!isFollowingPedestrian) {
+        setTabletVisible(false);
+    }
 
     // Añadir listener a la ventana
     window.addEventListener('keydown', handleKeyDown);
@@ -75,15 +96,20 @@ export default function Home() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-    // Dependencia: isFollowingPedestrian para que el callback capture su valor actual
+    // Dependencia: isFollowingPedestrian para reaccionar a cambios y capturar valor
   }, [isFollowingPedestrian]);
 
   return (
     <div className="min-h-screen w-full relative"> {/* Contenedor principal relativo */}
-      {/* Pasar el estado de seguimiento al fondo */}
-      <BuildingBackground isFollowing={isFollowingPedestrian} />
+      {/* Pasar el estado de seguimiento y el nuevo callback al fondo */}
+      <BuildingBackground 
+        isFollowing={isFollowingPedestrian} 
+        onFirstPersonViewReady={handleFirstPersonViewReady} 
+      />
       {/* Renderizar el texto solo si NO estamos siguiendo */}
       {!isFollowingPedestrian && <AnimatedText onStartFollow={handleStartFollow} />}
+      {/* Renderizar la tablet solo si el estado tabletVisible es true */}
+      {tabletVisible && <AnimatedTablet />}
     </div>
   );
 }
