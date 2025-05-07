@@ -15,10 +15,10 @@ const AnimatedText = dynamic(() => import('../components/AnimatedText'), {
   loading: () => null // No mostrar nada mientras carga el texto
 });
 
-// Importar dinámicamente el componente AnimatedTablet sin SSR
-const AnimatedTablet = dynamic(() => import('../components/AnimatedTablet'), {
-    ssr: false,
-    loading: () => null // No mostrar nada mientras carga la tablet
+// Importar dinámicamente el componente FirstPersonOverlay (nombre cambiado) sin SSR
+const FirstPersonOverlay = dynamic(() => import('../components/FirstPersonOverlay'), {
+  ssr: false,
+  loading: () => null // No mostrar nada mientras carga el overlay
 });
 
 // Importar dinámicamente el componente ParticleSystem sin SSR (Comentado)
@@ -32,20 +32,13 @@ const ParticleSystem = dynamic(() => import('../components/ParticleSystem'), {
 export default function Home() {
   // Estado para controlar si la cámara está siguiendo a un peatón
   const [isFollowingPedestrian, setIsFollowingPedestrian] = useState(false);
-  // Nuevo estado para controlar la visibilidad de la tablet (solo después de la transición)
-  const [tabletVisible, setTabletVisible] = useState(false);
+  // Estado para controlar la visibilidad del overlay
+  const [showOverlay, setShowOverlay] = useState(false);
 
   // Función para iniciar el seguimiento (envuelta en useCallback para estabilidad)
   const handleStartFollow = useCallback(() => {
     setIsFollowingPedestrian(true);
-    // setTabletVisible(false); // Asegurarse de que la tablet no se muestre al inicio
   }, []); // Sin dependencias, solo se crea una vez
-
-  // Callback para que BuildingBackground nos avise que la vista 1ra persona está lista
-  const handleFirstPersonViewReady = useCallback(() => {
-    console.log("Transición a primera persona completada, mostrando tablet.");
-    setTabletVisible(true);
-  }, []);
 
   // --- Efecto para Pantalla Completa con Doble Toque ---
   useEffect(() => {
@@ -73,21 +66,16 @@ export default function Home() {
     };
   }, []); // Array vacío: ejecutar solo una vez al montar
 
-  // --- Efecto para Tecla Escape y cambio de isFollowingPedestrian ---
+  // --- Efecto para Tecla Escape ---
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       // Si se presiona Escape Y estamos siguiendo a un peatón
       if (event.key === 'Escape' && isFollowingPedestrian) {
         console.log("Escape presionado, volviendo a vista aérea...");
-        setIsFollowingPedestrian(false);
-        setTabletVisible(false); // Ocultar la tablet al presionar Escape
+        setIsFollowingPedestrian(false); // Cambiar el estado para detener el seguimiento
+        setShowOverlay(false); // Ocultar el overlay al presionar Escape
       }
     };
-
-    // Ocultar tablet si isFollowingPedestrian se vuelve false por cualquier motivo
-    if (!isFollowingPedestrian) {
-        setTabletVisible(false);
-    }
 
     // Añadir listener a la ventana
     window.addEventListener('keydown', handleKeyDown);
@@ -96,20 +84,25 @@ export default function Home() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-    // Dependencia: isFollowingPedestrian para reaccionar a cambios y capturar valor
+    // Dependencia: isFollowingPedestrian para que el callback capture su valor actual
   }, [isFollowingPedestrian]);
+
+   // Función para manejar el inicio real del seguimiento y mostrar el overlay con retraso
+  const handleFollowStarted = useCallback(() => {
+    // Añadir un pequeño retraso (por ejemplo, 500ms)
+    setTimeout(() => {
+      setShowOverlay(true);
+    }, 500); // Retraso en milisegundos
+  }, []); // Sin dependencias, solo se crea una vez
 
   return (
     <div className="min-h-screen w-full relative"> {/* Contenedor principal relativo */}
-      {/* Pasar el estado de seguimiento y el nuevo callback al fondo */}
-      <BuildingBackground 
-        isFollowing={isFollowingPedestrian} 
-        onFirstPersonViewReady={handleFirstPersonViewReady} 
-      />
+      {/* Pasar el estado de seguimiento al fondo y la nueva función para notificar el fin de la transición */}
+      <BuildingBackground isFollowing={isFollowingPedestrian} onFollowStart={handleFollowStarted} />
       {/* Renderizar el texto solo si NO estamos siguiendo */}
       {!isFollowingPedestrian && <AnimatedText onStartFollow={handleStartFollow} />}
-      {/* Renderizar la tablet solo si el estado tabletVisible es true */}
-      {tabletVisible && <AnimatedTablet />}
+      {/* Renderizar la pantalla overlay (usando el nuevo nombre) */}
+      <FirstPersonOverlay isVisible={showOverlay} />
     </div>
   );
 }

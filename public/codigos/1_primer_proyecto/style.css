@@ -1,0 +1,28 @@
+/* Resetear márgenes y rellenos predeterminados para todos los elementos */
+* {
+    margin: 0;
+    padding: 0;
+}
+
+/* Asegurar que tanto html como body ocupen el 100% de la altura de la ventana 
+   y evitar barras de desplazamiento */
+html, body {
+    height: 100%;
+    overflow: hidden;
+}
+
+/* Centrar contenido en el body usando flexbox:
+   - display: flex - activa el modelo de diseño flexbox
+   - justify-content: center - centra horizontalmente
+   - align-items: center - centra verticalmente */
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Asegurar que el canvas se muestre como un elemento de bloque 
+   (sin espacios extra debajo) */
+.webgl {
+    display: block;
+}
