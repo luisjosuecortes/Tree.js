@@ -1,4 +1,5 @@
-import * as THREE from 'three'
+// Se elimina la importación ya que Three.js se carga desde CDN como variable global
+// import * as THREE from 'three'
 
 // Canvas
 const canvas = document.querySelector('canvas.webgl')
@@ -16,7 +17,7 @@ scene.add(axesHelper)
  * Objects
  */
 const group = new THREE.Group()
-group.scale.y = 2
+group.scale.y = 1
 group.rotation.y = 0.2
 scene.add(group)
 
@@ -29,14 +30,14 @@ group.add(cube1)
 
 const cube2 = new THREE.Mesh(
     new THREE.BoxGeometry(1, 1, 1),
-    new THREE.MeshBasicMaterial({ color: 0xff0000 })
+    new THREE.MeshBasicMaterial({ color: 0x00ff00 })
 )
 cube2.position.x = 0
 group.add(cube2)
 
 const cube3 = new THREE.Mesh(
     new THREE.BoxGeometry(1, 1, 1),
-    new THREE.MeshBasicMaterial({ color: 0xff0000 })
+    new THREE.MeshBasicMaterial({ color: 0x0000ff })
 )
 cube3.position.x = 1.5
 group.add(cube3)

@@ -1,4 +1,5 @@
-import * as THREE from 'three'
+// Se elimina la importación ya que Three.js se carga desde CDN como variable global
+// import * as THREE from 'three'
 
 // Canvas 
 const canvas = document.querySelector('canvas.webgl')
