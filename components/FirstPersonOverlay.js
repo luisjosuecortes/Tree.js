@@ -19,6 +19,8 @@ const FirstPersonOverlay = ({ isVisible }) => {
   const [isEditorTransitioning, setIsEditorTransitioning] = useState(false);
   const editorScrollActionTriggered = useRef(false);
   const editorContainerRef = useRef(null);
+  // Nuevo estado para cambios aplicados
+  const [justApplied, setJustApplied] = useState(false);
 
   // Estados para el iframe y editor integrado
   const [showEditorInIframe, setShowEditorInIframe] = useState(false);
@@ -575,11 +577,18 @@ animate();`
     if (Object.keys(modifiedFiles).length > 0) {
       updateIframeContent();
       
+      // Establecer justApplied a true para indicar que se acaba de aplicar un cambio
+      setJustApplied(true);
+      
       // Mostrar mensaje de éxito y ocultarlo después de un tiempo
       setShowAppliedMessage(true);
       setTimeout(() => {
         setShowAppliedMessage(false);
-      }, 3000);
+        // Después de otro corto tiempo, volver a false
+        setTimeout(() => {
+          setJustApplied(false);
+        }, 100);
+      }, 600);
     }
   };
 
@@ -707,6 +716,7 @@ animate();`
     setActiveProject(project);
     setShowEditorInIframe(false); // Inicialmente mostrar el proyecto, no el editor
     setModifiedFiles({}); // Resetear archivos modificados al abrir un nuevo proyecto
+    setJustApplied(false); // Resetear el estado de aplicación
     
     // Si el proyecto tiene archivos, seleccionar el primero por defecto
     if (project.files && project.files.length > 0) {
@@ -1274,7 +1284,7 @@ body {
             onClick={closeProject}
             style={{
               position: 'absolute',
-              top: '40px',
+              bottom: '40px',
               right: '40px',
               color: 'white',
               cursor: 'pointer',
@@ -1570,42 +1580,52 @@ body {
                               style={{
                                 position: 'absolute',
                                 bottom: '20px',
-                                right: '20px',
-                                backgroundColor: 'rgba(15, 23, 42, 0.4)',
-                                color: '#93c5fd',
+                                right: '15px',
+                                backgroundColor: justApplied ? 'rgba(22, 101, 52, 0.5)' : 'rgba(15, 23, 42, 0.4)',
+                                color: justApplied ? '#86efac' : '#93c5fd',
                                 fontSize: '13px',
                                 padding: '6px 14px',
                                 borderRadius: '6px',
                                 backdropFilter: 'blur(6px)',
-                                border: '1px solid rgba(59, 130, 246, 0.4)',
+                                border: justApplied ? '1px solid rgba(74, 222, 128, 0.5)' : '1px solid rgba(59, 130, 246, 0.4)',
                                 cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '8px',
                                 zIndex: 30,
                                 transition: 'all 0.2s ease',
-                                animation: 'applyButtonAppear 0.5s ease-out',
-                                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
+                                animation: justApplied ? 'greenPulse 1s ease' : 'applyButtonAppear 0.5s ease-out',
+                                boxShadow: justApplied ? '0 2px 8px rgba(22, 101, 52, 0.3)' : '0 2px 8px rgba(0, 0, 0, 0.2)',
                                 fontFamily: '"Fira Code", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
                                 letterSpacing: '0.3px',
                               }}
                               onMouseEnter={(e) => {
-                                e.currentTarget.style.backgroundColor = 'rgba(30, 58, 138, 0.6)';
-                                e.currentTarget.style.border = '1px solid rgba(96, 165, 250, 0.6)';
+                                if (justApplied) {
+                                  e.currentTarget.style.backgroundColor = 'rgba(22, 101, 52, 0.7)';
+                                  e.currentTarget.style.border = '1px solid rgba(74, 222, 128, 0.7)';
+                                } else {
+                                  e.currentTarget.style.backgroundColor = 'rgba(30, 58, 138, 0.6)';
+                                  e.currentTarget.style.border = '1px solid rgba(96, 165, 250, 0.6)';
+                                }
                                 e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.25)';
                                 e.currentTarget.style.transform = 'translateY(-1px)';
                               }}
                               onMouseLeave={(e) => {
-                                e.currentTarget.style.backgroundColor = 'rgba(15, 23, 42, 0.4)';
-                                e.currentTarget.style.border = '1px solid rgba(59, 130, 246, 0.4)';
+                                if (justApplied) {
+                                  e.currentTarget.style.backgroundColor = 'rgba(22, 101, 52, 0.5)';
+                                  e.currentTarget.style.border = '1px solid rgba(74, 222, 128, 0.5)';
+                                } else {
+                                  e.currentTarget.style.backgroundColor = 'rgba(15, 23, 42, 0.4)';
+                                  e.currentTarget.style.border = '1px solid rgba(59, 130, 246, 0.4)';
+                                }
                                 e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.2)';
                                 e.currentTarget.style.transform = 'translateY(0)';
                               }}
                             >
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M5 13L9 17L19 7" stroke="#4ADE80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                <path d="M5 13L9 17L19 7" stroke={justApplied ? "#4ADE80" : "#4ADE80"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                               </svg>
-                              Aplicar
+                              {justApplied ? 'Modificado' : 'Aplicar'}
                             </div>
                           )}
                         </>
@@ -1698,6 +1718,11 @@ body {
         @keyframes bounceIn {
           0%, 20%, 40%, 60%, 80%, 100% { transform: scale(1); }
           50% { transform: scale(1.1); }
+        }
+        @keyframes greenPulse {
+          0% { background-color: rgba(22, 101, 52, 0.5); }
+          50% { background-color: rgba(22, 101, 52, 0.8); box-shadow: 0 0 15px rgba(74, 222, 128, 0.7); }
+          100% { background-color: rgba(22, 101, 52, 0.5); }
         }
         
         /* Estilos personalizados para barras de desplazamiento en Webkit (Chrome, Safari, Edge) */

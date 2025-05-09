@@ -48,7 +48,7 @@ const customTheme = EditorView.theme({
   '.cm-content': {
     caretColor: '#5eead4',
     minHeight: '100%',
-    paddingBottom: 'calc(100% - 100px)', // Mucho más padding para scroll extenso
+    paddingBottom: '20px', // Reducido significativamente (antes era 'calc(100% - 100px)')
     paddingTop: '8px', // Añadir un poco de espacio superior
     whiteSpace: 'pre', // Forzar espacio en blanco para evitar wrapping automático
   },
