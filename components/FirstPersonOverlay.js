@@ -492,49 +492,62 @@ animate();`
     if (!showCodeEditor || !editorContainerRef.current) return;
 
     const handleEditorScroll = (e) => {
-      // Prevenir el comportamiento por defecto del scroll
-      e.preventDefault();
-
-      // Evitamos procesamiento si ya se ha desencadenado una acción o si hay una transición en curso
-      if (editorScrollActionTriggered.current || isEditorTransitioning) return;
-
-      // Detectamos la dirección del scroll horizontal
-      const isScrollingRight = e.deltaX > 0;
+      // Solo manejamos el scroll horizontal para cambiar de vista
+      // El scroll vertical lo deja al editor principal
       
-      if (isScrollingRight && currentEditorView < editorViews.length - 1) {
-        editorScrollActionTriggered.current = true;
-        setIsEditorTransitioning(true);
+      // Detectar si hay scroll horizontal significativo
+      const isSignificantHorizontalScroll = Math.abs(e.deltaX) > Math.abs(e.deltaY) && Math.abs(e.deltaX) > 5;
+      
+      if (isSignificantHorizontalScroll) {
+        // Prevenir el comportamiento por defecto solo para scroll horizontal
+        e.preventDefault();
         
-        setTimeout(() => {
-          setCurrentEditorView(prev => prev + 1);
-        }, 300);
-        
-        setTimeout(() => {
-          setIsEditorTransitioning(false);
-          editorScrollActionTriggered.current = false;
-        }, 600);
-        
-      } else if (!isScrollingRight && currentEditorView > 0) {
-        editorScrollActionTriggered.current = true;
-        setIsEditorTransitioning(true);
-        
-        setTimeout(() => {
-          setCurrentEditorView(prev => prev - 1);
-        }, 300);
-        
-        setTimeout(() => {
-          setIsEditorTransitioning(false);
-          editorScrollActionTriggered.current = false;
-        }, 600);
+        // Scroll a la derecha - ir al editor
+        if (e.deltaX < 0) {
+          // Prevenir múltiples acciones de scroll rápidas
+          if (!editorScrollActionTriggered.current) {
+            editorScrollActionTriggered.current = true;
+            
+            // Usar la función de cambio existente
+            if (showEditorInIframe) {
+              setShowEditorInIframe(false);
+            }
+            
+            // Desbloquear después de un pequeño delay
+            setTimeout(() => {
+              editorScrollActionTriggered.current = false;
+            }, 800);
+          }
+        }
+        // Scroll a la izquierda - ir al iframe
+        else if (e.deltaX > 0) {
+          // Prevenir múltiples acciones de scroll rápidas
+          if (!editorScrollActionTriggered.current) {
+            editorScrollActionTriggered.current = true;
+            
+            // Usar la función de cambio existente
+            if (!showEditorInIframe) {
+              setShowEditorInIframe(true);
+            }
+            
+            // Desbloquear después de un pequeño delay
+            setTimeout(() => {
+              editorScrollActionTriggered.current = false;
+            }, 800);
+          }
+        }
       }
+      // Importante: ¡no manejamos el scroll vertical aquí!
+      // Dejamos que el CodeEditor maneje el scroll vertical
     };
 
+    // Agregar el evento solo al contenedor principal, no al scroller interno
     editorContainerRef.current.addEventListener('wheel', handleEditorScroll, { passive: false });
 
     return () => {
       editorContainerRef.current?.removeEventListener('wheel', handleEditorScroll);
     };
-  }, [showCodeEditor, currentEditorView, isEditorTransitioning]);
+  }, [showCodeEditor, currentEditorView, isEditorTransitioning, showEditorInIframe, setShowEditorInIframe]);
 
   // Nuevo estado para manejar el archivo actual
   const [currentFile, setCurrentFile] = useState(null);
@@ -743,40 +756,50 @@ animate();`
     if (!activeProject || !iframeContainerRef.current) return;
 
     const handleIframeScroll = (e) => {
-      // Comprobar si el desplazamiento horizontal es significativo para evitar interferir con scroll vertical
+      // Comprobar si el desplazamiento horizontal es significativo
       const isSignificantHorizontalScroll = Math.abs(e.deltaX) > Math.abs(e.deltaY) && Math.abs(e.deltaX) > 5;
       
-      // Solo prevenir el comportamiento por defecto para scroll horizontal significativo
       if (isSignificantHorizontalScroll) {
+        // Prevenir el comportamiento por defecto solo para scroll horizontal
         e.preventDefault();
-
-        // Evitar procesamiento si ya se ha desencadenado una acción
-        if (iframeScrollTriggered.current) return;
-
-        // Detectar la dirección del scroll horizontal
-        const isScrollingRight = e.deltaX > 0;
-        const isScrollingLeft = e.deltaX < 0;
         
-        if (isScrollingRight && !showEditorInIframe) {
-          // Deslizar a la derecha: mostrar editor
-          iframeScrollTriggered.current = true;
-          setShowEditorInIframe(true);
-          
-          setTimeout(() => {
-            iframeScrollTriggered.current = false;
-          }, 500);
-        } 
-        else if (isScrollingLeft && showEditorInIframe) {
-          // Deslizar a la izquierda: mostrar proyecto
-          iframeScrollTriggered.current = true;
-          setShowEditorInIframe(false);
-          
-          setTimeout(() => {
-            iframeScrollTriggered.current = false;
-          }, 500);
+        // Scroll a la derecha - ir al iframe
+        if (e.deltaX < 0) {
+          // Prevenir múltiples acciones de scroll rápidas
+          if (!iframeScrollTriggered.current) {
+            iframeScrollTriggered.current = true;
+            
+            // Usar la función de cambio existente
+            if (showEditorInIframe) {
+              setShowEditorInIframe(false);
+            }
+            
+            // Desbloquear después de un pequeño delay
+            setTimeout(() => {
+              iframeScrollTriggered.current = false;
+            }, 800);
+          }
+        }
+        // Scroll a la izquierda - ir al editor de código
+        else if (e.deltaX > 0) {
+          // Prevenir múltiples acciones de scroll rápidas
+          if (!iframeScrollTriggered.current) {
+            iframeScrollTriggered.current = true;
+            
+            // Usar la función de cambio existente
+            if (!showEditorInIframe) {
+              setShowEditorInIframe(true);
+            }
+            
+            // Desbloquear después de un pequeño delay
+            setTimeout(() => {
+              iframeScrollTriggered.current = false;
+            }, 800);
+          }
         }
       }
-      // Para desplazamiento vertical, permitir el comportamiento predeterminado
+      // Para el desplazamiento vertical dentro del iframe, no hacemos nada
+      // Dejamos que el comportamiento nativo del iframe maneje el scroll vertical
     };
 
     iframeContainerRef.current.addEventListener('wheel', handleIframeScroll, { passive: false });
@@ -784,7 +807,7 @@ animate();`
     return () => {
       iframeContainerRef.current?.removeEventListener('wheel', handleIframeScroll);
     };
-  }, [activeProject, showEditorInIframe]);
+  }, [activeProject, showEditorInIframe, setShowEditorInIframe]);
 
   if (!isVisible) {
     return null;
@@ -1072,7 +1095,7 @@ body {
         return {
           ...baseStyle,
           opacity: 1,
-          transform: 'translateY(0)',
+          transform: 'scale(1)',
           transition: 'opacity 0.4s ease, transform 0.4s ease',
           transitionDelay: '0.1s',
         };
@@ -1519,7 +1542,18 @@ body {
                     </div>
                     
                     {/* Editor de código con el archivo seleccionado */}
-                    <div style={{ flex: '1', overflow: 'auto', position: 'relative' }}>
+                    <div style={{ 
+                      flex: '1', 
+                      overflow: 'hidden', // Cambiado de 'auto' a 'hidden' para evitar barras de desplazamiento duplicadas
+                      position: 'relative',
+                      // Estos estilos adicionales ayudan a mostrar mejor las barras de desplazamiento 
+                      padding: '0', 
+                      margin: '0',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      // Añadir un poco de espacio para la barra de desplazamiento
+                      paddingRight: '3px',
+                    }}>
                       {currentFile && (
                         <>
                           <CodeEditor 
@@ -1681,6 +1715,52 @@ body {
         }
         .explorer-container::-webkit-scrollbar-thumb:hover {
           background-color: rgba(59, 130, 246, 0.7);
+        }
+        
+        /* Estilos mejorados para barras de desplazamiento en el editor de código */
+        .cm-scroller::-webkit-scrollbar {
+          width: 10px;
+          height: 10px;
+        }
+        .cm-scroller::-webkit-scrollbar-track {
+          background: rgba(0, 0, 0, 0.2);
+          border-radius: 0;
+        }
+        .cm-scroller::-webkit-scrollbar-thumb {
+          background-color: rgba(59, 130, 246, 0.5);
+          border-radius: 5px;
+          border: 2px solid rgba(15, 23, 42, 0.6);
+          background-clip: padding-box;
+          min-height: 40px;
+        }
+        .cm-scroller::-webkit-scrollbar-thumb:hover {
+          background-color: rgba(96, 165, 250, 0.7);
+        }
+        .cm-scroller::-webkit-scrollbar-corner {
+          background: transparent;
+        }
+        
+        /* Estilo para la barra de desplazamiento vertical en el borde derecho */
+        .cm-scroller::-webkit-scrollbar-button {
+          display: none;
+        }
+        
+        /* Animación de destello para la barra de desplazamiento cuando se activa */
+        .cm-scroller::-webkit-scrollbar-thumb:active {
+          background-color: rgba(96, 165, 250, 0.9);
+        }
+        
+        /* Asegurarnos de que el contenedor del editor tiene las propiedades correctas */
+        .cm-editor {
+          height: 100%;
+          position: relative;
+          z-index: 1;
+        }
+        
+        /* Garantizar que el contenedor del scroll recibe eventos */
+        .cm-scroller {
+          pointer-events: auto !important;
+          touch-action: pan-y !important;
         }
       `}</style>
     </div>

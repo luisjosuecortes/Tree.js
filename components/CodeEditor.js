@@ -14,18 +14,36 @@ const customTheme = EditorView.theme({
     height: 'auto !important',
     minHeight: '100%',
     fontSize: '15px', // Aumentado ligeramente para mejor legibilidad
+    position: 'relative',
   },
   '.cm-scroller': {
     overflow: 'auto', // Permitir scroll en todas direcciones
     fontFamily: '"Fira Code", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
     lineHeight: '1.5', // Mejorar espaciado entre líneas
-    // Estilos personalizados para las barras de desplazamiento
+    // Estilos personalizados para las barras de desplazamiento (ahora visibles)
     '&::-webkit-scrollbar': {
-      width: '0px', // Ocultar la barra de desplazamiento vertical
-      height: '0px', // Ocultar la barra de desplazamiento horizontal
+      width: '8px', // Ancho de la barra de desplazamiento vertical
+      height: '8px', // Altura de la barra de desplazamiento horizontal
+    },
+    '&::-webkit-scrollbar-track': {
+      background: 'rgba(0, 0, 0, 0.2)', // Fondo semi-transparente para la pista
+      borderRadius: '4px', // Bordes redondeados
+    },
+    '&::-webkit-scrollbar-thumb': {
+      background: 'rgba(59, 130, 246, 0.5)', // Color azul semi-transparente (coincide con el tema)
+      borderRadius: '4px', // Bordes redondeados
+      border: '2px solid transparent', // Borde para crear un efecto "flotante"
+      backgroundClip: 'padding-box', // Evita que el fondo se vea en los bordes
+    },
+    '&::-webkit-scrollbar-thumb:hover': {
+      background: 'rgba(59, 130, 246, 0.7)', // Más opaco al pasar el cursor
+    },
+    '&::-webkit-scrollbar-corner': {
+      background: 'transparent', // Esquina transparente
     },
     // Estilos para Firefox
-    scrollbarWidth: 'none', // Ocultar las barras de desplazamiento en Firefox
+    scrollbarWidth: 'thin', // Mostrar barras delgadas en Firefox
+    scrollbarColor: 'rgba(59, 130, 246, 0.5) rgba(0, 0, 0, 0.2)', // Color del thumb y track para Firefox
   },
   '.cm-content': {
     caretColor: '#5eead4',
@@ -38,6 +56,7 @@ const customTheme = EditorView.theme({
     borderLeftColor: '#5eead4',
     borderLeftWidth: '2px', // Cursor más visible
     transition: 'opacity 0.15s ease', // Animación suave para el cursor
+    // Eliminamos la animación de pulsación
   },
   '.cm-gutters': {
     backgroundColor: 'rgba(30, 41, 59, 0.4)', // Cambio de negro a gris azulado oscuro
@@ -45,28 +64,64 @@ const customTheme = EditorView.theme({
     border: 'none',
     borderRight: '1px solid rgba(45, 55, 72, 0.5)',
     paddingRight: '8px', // Más espacio para los números de línea
+    transition: 'background-color 0.2s ease', // Animación suave para cambios
   },
   '.cm-activeLineGutter': {
-    backgroundColor: 'rgba(59, 130, 246, 0.15)', // Un poco más visible
-    color: '#93c5fd'
+    backgroundColor: 'rgba(59, 130, 246, 0.25)', // Un poco más visible
+    color: '#93c5fd',
+    transition: 'background-color 0.2s ease, color 0.2s ease',
+    // Eliminamos la animación de pulsación
   },
   '.cm-activeLine': {
-    backgroundColor: 'rgba(30, 58, 138, 0.18)', // Un poco más visible
+    backgroundColor: 'rgba(30, 58, 138, 0.25)', // Un poco más visible
+    borderRadius: '3px', // Bordes redondeados para la línea activa
+    transition: 'background-color 0.2s ease', // Transición suave
+    // Eliminamos la animación de pulsación
   },
   '.cm-selectionMatch': {
-    backgroundColor: 'rgba(45, 212, 191, 0.2)',
+    backgroundColor: 'rgba(45, 212, 191, 0.3)', // Más visible
+    borderRadius: '3px', // Bordes redondeados
+    // Eliminamos el efecto de resplandor
   },
   '.cm-line': {
     paddingLeft: '8px', // Más espacio para mejor legibilidad
     fontSize: '15px',
     fontVariantLigatures: 'none', // Desactivar ligaduras para mejor claridad
+    transition: 'background-color 0.2s ease', // Transición más sutil solo para el color de fondo
+    borderRadius: '3px', // Bordes redondeados para las líneas
+    position: 'relative', // Para el hover y efectos
+    '&:hover': {
+      backgroundColor: 'rgba(59, 130, 246, 0.1)', // Fondo sutil al pasar el ratón (más sutil)
+      // Eliminamos el desplazamiento y el espaciado de letras para un efecto más natural
+    },
+    '&.cm-active': { // Línea actual seleccionada
+      color: '#ffffff', // Color más brillante
+    }
+  },
+  // Añadir efectos sutiles para tokens y texto en hover
+  '.cm-content .cm-line span': {
+    transition: 'color 0.2s ease',
+    borderRadius: '2px',
+  },
+  '.cm-content .cm-line span:hover': {
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    animation: 'textTokenHover 1.5s infinite ease-in-out',
+  },
+  '.cm-selected': { // Mejorar el estilo de selección de texto
+    backgroundColor: 'rgba(59, 130, 246, 0.4) !important', // Azul más vibrante
+    borderRadius: '3px', // Bordes redondeados para la selección
+    transition: 'background-color 0.2s ease', // Suavizar cambios
+    animation: 'textHighlight 2s infinite ease-in-out', // Añadir una animación sutil
   },
   '.cm-searchMatch': {
     backgroundColor: 'rgba(250, 204, 21, 0.3)',
     outline: '1px solid rgba(234, 179, 8, 0.5)',
+    borderRadius: '3px', // Bordes redondeados
+    // Eliminamos la animación pulsante
   },
   '.cm-searchMatch.cm-searchMatch-selected': {
     backgroundColor: 'rgba(234, 179, 8, 0.4)',
+    // Eliminamos el resplandor
   },
   // Estilos para indentación y espacios en blanco
   '.cm-indent': {
@@ -76,6 +131,27 @@ const customTheme = EditorView.theme({
   // Mejora para bloques de funciones
   '.cm-line:has(.ͼb.ͼ9)': { // Selector para líneas con definición de función
     marginTop: '4px', // Espacio adicional antes de las funciones
+    '&:hover': {
+      backgroundColor: 'rgba(99, 102, 241, 0.15)', // Color especial para funciones (más sutil)
+    }
+  },
+  // Estilo especial para palabras clave
+  '.cm-keyword': {
+    transition: 'color 0.2s ease',
+    '&:hover': {
+      color: '#a78bfa !important', // Color más brillante al pasar el ratón
+      // Eliminamos el resplandor
+      cursor: 'pointer',
+    }
+  },
+  // Estilo especial para strings
+  '.cm-string': {
+    transition: 'color 0.2s ease',
+    '&:hover': {
+      color: '#86efac !important', // Verde más brillante al pasar el ratón
+      // Eliminamos el resplandor
+      cursor: 'pointer',
+    }
   },
   // Estilos para el panel de autocompletado
   '.cm-tooltip': {
@@ -83,8 +159,9 @@ const customTheme = EditorView.theme({
     border: '1px solid rgba(59, 130, 246, 0.3) !important',
     borderRadius: '6px',
     backdropFilter: 'blur(8px)',
-    boxShadow: '0 4px 15px rgba(0, 0, 0, 0.3)',
+    boxShadow: '0 4px 15px rgba(0, 0, 0, 0.3), 0 0 10px rgba(59, 130, 246, 0.2)', // Resplandor azul
     overflow: 'hidden',
+    animation: 'tooltipAppear 0.2s ease-out', // Animación de aparición
   },
   '.cm-tooltip.cm-tooltip-autocomplete': {
     minWidth: '220px',
@@ -103,13 +180,17 @@ const customTheme = EditorView.theme({
       padding: '4px 8px',
       borderRadius: '4px',
       margin: '2px 4px',
+      transition: 'background-color 0.15s ease, transform 0.15s ease', // Animación al pasar ratón
     },
     '& > ul > li:hover': {
-      backgroundColor: 'rgba(59, 130, 246, 0.2) !important',
+      backgroundColor: 'rgba(59, 130, 246, 0.25) !important',
+      transform: 'translateX(3px)', // Desplazamiento al pasar el ratón
     },
     '& > ul > li[aria-selected]': {
-      backgroundColor: 'rgba(59, 130, 246, 0.3) !important',
-      color: '#e2e8f0',
+      backgroundColor: 'rgba(59, 130, 246, 0.35) !important',
+      color: '#ffffff',
+      transform: 'translateX(5px)', // Mayor desplazamiento para el elemento seleccionado
+      boxShadow: '0 0 10px rgba(59, 130, 246, 0.2)', // Sutil resplandor para el elemento seleccionado
     }
   },
   // Estilos para tipos de items en el autocompletado
@@ -120,44 +201,66 @@ const customTheme = EditorView.theme({
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
+    transition: 'transform 0.15s ease', // Animación al pasar ratón
   },
   '.cm-completionIcon-function': {
     color: '#9D8FFF !important',
     '&:before': { content: "'ƒ'" },
+    '&:hover': {
+      transform: 'scale(1.2) rotate(5deg)', // Escalar y rotar ligeramente al pasar el ratón
+    }
   },
   '.cm-completionIcon-method': {
     color: '#C792EA !important',
     '&:before': { content: "'ƒ'" },
+    '&:hover': {
+      transform: 'scale(1.2) rotate(-5deg)', // Escalar y rotar ligeramente al pasar el ratón
+    }
   },
   '.cm-completionIcon-keyword': {
     color: '#FF5AFF !important',
     '&:before': { content: "'🔑'" },
+    '&:hover': {
+      transform: 'scale(1.2) rotate(10deg)', // Escalar y rotar al pasar el ratón
+    }
   },
   '.cm-completionIcon-constant': {
     color: '#FFA53D !important',
     '&:before': { content: "'𝝿'" },
+    '&:hover': {
+      transform: 'scale(1.2)', // Escalar al pasar el ratón
+    }
   },
   '.cm-completionIcon-variable': {
     color: '#80E1FF !important',
     '&:before': { content: "'𝘃'" },
+    '&:hover': {
+      transform: 'scale(1.2) rotate(-5deg)', // Escalar y rotar ligeramente al pasar el ratón
+    }
   },
   '.cm-completionIcon-class': {
     color: '#66D9E8 !important',
     '&:before': { content: "'𝗖'" },
+    '&:hover': {
+      transform: 'scale(1.2)', // Escalar al pasar el ratón
+    }
   },
   // Estilos para el texto de autocompletado
   '.cm-completionLabel': {
     color: '#e2e8f0',
+    transition: 'color 0.15s ease', // Animación suave para cambios de color
   },
   '.cm-completionDetail': {
     color: '#94A3B8',
     fontStyle: 'italic',
-    fontSize: '0.9em'
+    fontSize: '0.9em',
+    transition: 'color 0.15s ease', // Animación suave para cambios de color
   },
   '.cm-completionMatchedText': {
     color: '#4ADE80',
     textDecoration: 'underline',
     fontWeight: '500',
+    transition: 'all 0.15s ease', // Animación suave para todos los cambios
   }
 });
 
@@ -328,6 +431,73 @@ const CodeEditor = ({ code, onChange, language = 'javascript', isModified = fals
   // Referencia para el estado de inicialización
   const isInitializedRef = useRef(false);
   
+  // Referencia para el contenedor del editor
+  const editorContainerRef = useRef(null);
+  
+  // Configurar el manejo mejorado del scroll para trackpad
+  useEffect(() => {
+    // Utilizamos directamente la referencia del editor para obtener el DOM del scroller
+    const handleScroll = (e) => {
+      const view = editorRef.current;
+      if (!view) return;
+      
+      const scroller = view.scrollDOM;
+      if (!scroller) return;
+      
+      // Determinar si es un gesto de trackpad
+      // La detección es más robusta: los eventos de trackpad tienen valores pequeños y fraccionarios
+      const isTrackpadGesture = Math.abs(e.deltaY) < 20 && !Number.isInteger(e.deltaY);
+      
+      // Factores de velocidad diferentes para trackpad vs rueda de ratón
+      const speedFactor = isTrackpadGesture ? 0.8 : 1.5;
+      
+      if (Math.abs(e.deltaY) > 0) {
+        // Calcular la cantidad de desplazamiento
+        const scrollAmount = e.deltaY * speedFactor;
+        
+        // Aplicar el desplazamiento directamente al contenedor
+        scroller.scrollTop += scrollAmount;
+        
+        // Prevenir el comportamiento por defecto para tener control total
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Disparar un evento de scroll para que el editor actualice su estado
+        const scrollEvent = new Event('scroll', { bubbles: true });
+        scroller.dispatchEvent(scrollEvent);
+      }
+    };
+    
+    // Mejor manejo de la espera para que el editor esté listo
+    const setupScrollHandler = () => {
+      // Esperar a que el editor esté completamente inicializado
+      if (!editorRef.current) {
+        // Intentar de nuevo en un momento
+        setTimeout(setupScrollHandler, 50);
+        return;
+      }
+      
+      const scroller = editorRef.current.scrollDOM;
+      if (scroller) {
+        // Limpiar cualquier controlador existente antes de añadir uno nuevo
+        scroller.removeEventListener('wheel', handleScroll);
+        // Agregar el controlador al contenedor específico de esta instancia
+        scroller.addEventListener('wheel', handleScroll, { passive: false });
+        console.log('Controlador de scroll configurado correctamente');
+      }
+    };
+    
+    // Iniciar la configuración
+    setupScrollHandler();
+    
+    // Limpieza al desmontar
+    return () => {
+      if (editorRef.current && editorRef.current.scrollDOM) {
+        editorRef.current.scrollDOM.removeEventListener('wheel', handleScroll);
+      }
+    };
+  }, []);
+  
   // Extensión para monitorear el editor
   const monitorEditor = EditorView.updateListener.of((update) => {
     // Actualizar la referencia
@@ -350,26 +520,83 @@ const CodeEditor = ({ code, onChange, language = 'javascript', isModified = fals
   const languageExtension = javascript(); // Por defecto usamos JavaScript
 
   return (
-    <div style={{
-      width: '100%', 
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      backgroundColor: 'rgba(15, 23, 42, 0.4)',
-      backdropFilter: 'blur(8px)',
-      border: '1px solid rgba(51, 65, 85, 0.3)',
-      borderRadius: '6px',
-      overflow: 'auto',
-      position: 'relative', // Para posicionar el indicador modificado
-      msOverflowStyle: 'none', // Ocultar scrollbar en IE y Edge
-      scrollbarWidth: 'none', // Ocultar scrollbar en Firefox
-    }}>
-      {/* Ocultar scrollbar en Webkit (Chrome, Safari, etc.) */}
+    <div 
+      ref={editorContainerRef}
+      style={{
+        width: '100%', 
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: 'rgba(15, 23, 42, 0.4)',
+        backdropFilter: 'blur(8px)',
+        border: '1px solid rgba(51, 65, 85, 0.3)',
+        borderRadius: '6px',
+        overflow: 'hidden', // Cambiado de 'auto' a 'hidden' para evitar barras duplicadas
+        position: 'relative', // Para posicionar el indicador modificado
+      }}>
+      {/* Estilos para las barras de desplazamiento y animaciones */}
       <style jsx>{`
+        /* Estilos personalizados para barras de desplazamiento en contenedor principal */
         div::-webkit-scrollbar {
-          display: none;
+          width: 8px;
+          height: 8px;
+        }
+        div::-webkit-scrollbar-track {
+          background: rgba(0, 0, 0, 0.2);
+          border-radius: 4px;
+        }
+        div::-webkit-scrollbar-thumb {
+          background-color: rgba(59, 130, 246, 0.5);
+          border-radius: 4px;
+          border: 2px solid transparent;
+          background-clip: padding-box;
+        }
+        div::-webkit-scrollbar-thumb:hover {
+          background-color: rgba(59, 130, 246, 0.7);
+        }
+        div::-webkit-scrollbar-corner {
+          background: transparent;
+        }
+        
+        /* Asegurarnos de que las interacciones de puntero funcionan correctamente */
+        .cm-scroller {
+          pointer-events: auto !important;
+          touch-action: pan-y !important;
+        }
+        
+        /* Hacer que el editor ocupe todo el espacio disponible */
+        .cm-editor {
+          height: 100%;
+          min-height: 100%;
+        }
+        
+        /* Simplificamos las animaciones para los efectos del editor */
+        
+        /* Estilos para líneas al pasar el ratón - más sutil */
+        .cm-line:hover {
+          z-index: 1;
+        }
+        
+        /* Animación sutil para resaltado de texto */
+        @keyframes textHighlight {
+          0%, 100% { box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.1); }
+          50% { box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+        }
+        
+        /* Animación sutil para elementos de texto en hover */
+        @keyframes textTokenHover {
+          0%, 100% { box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.1); }
+          50% { box-shadow: 0 0 3px 1px rgba(59, 130, 246, 0.2); }
+        }
+        
+        /* Estilo para elementos de texto en hover */
+        .cm-content .cm-line span:hover {
+          background-color: rgba(59, 130, 246, 0.15);
+          position: relative;
+          z-index: 2;
         }
       `}</style>
+      
       {isModified && (
         <div style={{
           position: 'absolute',
@@ -390,7 +617,11 @@ const CodeEditor = ({ code, onChange, language = 'javascript', isModified = fals
           alignItems: 'center',
           gap: '5px',
           boxShadow: '0 2px 10px rgba(0, 0, 0, 0.15)',
-          animation: 'fadeIn 0.3s ease-out',
+          transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+          '&:hover': {
+            transform: 'translateY(-2px)',
+            boxShadow: '0 4px 15px rgba(59, 130, 246, 0.3)',
+          }
         }}>
           <span style={{ 
             fontSize: '14px', 
@@ -400,7 +631,7 @@ const CodeEditor = ({ code, onChange, language = 'javascript', isModified = fals
           Modificado
         </div>
       )}
-    
+      
       <CodeMirror
         value={code}
         extensions={[
@@ -440,7 +671,11 @@ const CodeEditor = ({ code, onChange, language = 'javascript', isModified = fals
         style={{ 
           flex: 1,
           fontFamily: '"Fira Code", monospace',
-          fontSize: '15px'
+          fontSize: '15px',
+          height: '100%', // Asegurar que el editor ocupe todo el espacio
+          minHeight: '100%', // Asegurar altura mínima
+          display: 'flex', // Usar flexbox para ocupar todo el espacio
+          flexDirection: 'column'
         }}
       />
     </div>
