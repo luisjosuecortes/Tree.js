@@ -54,7 +54,7 @@ const BuildingBackground = ({ isFollowing, onFollowStart }) => {
     // scene.fog = new THREE.FogExp2(0x000000, 0.03); // Niebla exponencial negra
     // Usar niebla lineal para un resplandor/color de fondo gradual
     // Hacer el color más oscuro y el rango más lejano para un efecto muy sutil
-    scene.fog = new THREE.Fog(0x040408, 80, 300); // Color casi negro, empieza a los 80, total a los 300 (antes 0x080818, 50, 200)
+    scene.fog = new THREE.Fog(0x020205, 80, 280); // Cielo/Niebla azul muy oscuro
 
     // --- Cámara Perspectiva ---
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 800);
@@ -66,7 +66,9 @@ const BuildingBackground = ({ isFollowing, onFollowStart }) => {
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     // Establecer clearColor al mismo color base de la niebla para transición suave
-    renderer.setClearColor(0x040408); // Color casi negro (antes 0x080818)
+    renderer.setClearColor(0x020205); // Fondo azul muy oscuro, coincidente con la niebla
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.6; // Aumentar significativamente la exposición para más brillo general
     renderer.domElement.style.position = 'fixed';
     renderer.domElement.style.top = '0';
     renderer.domElement.style.left = '0';
@@ -77,9 +79,9 @@ const BuildingBackground = ({ isFollowing, onFollowStart }) => {
 
     const bloomPass = new UnrealBloomPass(
         new THREE.Vector2(window.innerWidth, window.innerHeight),
-        1.2, // strength - Menos intensidad (antes 1.8)
-        0.6, // radius - Mantenemos radio
-        0.7  // threshold - Umbral un poco más alto (antes 0.65)
+        1.6, // strength - Intensidad de bloom ligeramente reducida
+        0.6, // radius - Radio un poco mayor para un halo más suave
+        0.25 // threshold - Umbral más alto, bloom más selectivo
     );
     // Ajustar valores si es necesario:
     // bloomPass.threshold = 0.8; 
@@ -91,10 +93,10 @@ const BuildingBackground = ({ isFollowing, onFollowStart }) => {
     composer.addPass(bloomPass);
 
     // --- Luces ---
-    const ambientLight = new THREE.AmbientLight(0x606070, 1.5); // Mantenemos ambiental
+    const ambientLight = new THREE.AmbientLight(0x607090, 1.2); // Luz ambiental más intensa
     scene.add(ambientLight);
-    const directionalLight = new THREE.DirectionalLight(0xa0b0ff, 1.0); // Más intensidad y color ajustado (antes 0x90a0ff, 0.8)
-    directionalLight.position.set(20, 40, -100); // Posición alta/lejana, similar a la luna (antes 8, 15, 10)
+    const directionalLight = new THREE.DirectionalLight(0x8090B0, 0.9); // Luz direccional más clara y más intensa
+    directionalLight.position.set(30, 50, -80); 
     directionalLight.target.position.set(0, 0, 0); // Asegurar que apunta al centro
     scene.add(directionalLight);
     scene.add(directionalLight.target); // Es necesario añadir el target a la escena si se mueve
@@ -104,23 +106,52 @@ const BuildingBackground = ({ isFollowing, onFollowStart }) => {
     // scene.add(pointLight);
 
     // --- Materiales ---
-    const buildingMaterial = new THREE.MeshLambertMaterial({ color: 0x333344 });
-    const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x0a0a10 });
-    const streetMaterial = new THREE.MeshLambertMaterial({ color: 0x222228 });
-    const carLightMaterial = new THREE.MeshBasicMaterial({ color: 0xffffe0 }); // Blanco-amarillo más brillante
+    const buildingMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x25283D, // Edificios con un azul oscuro más saturado y perceptible
+        metalness: 0.5,  // Menos metálico, el color base es más visible
+        roughness: 0.5,  // Más rugoso, mejor captación de luz y color difuso
+        envMapIntensity: 0.9
+    });
+    const groundMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x080810, // Suelo un poco más claro
+        metalness: 0.1,
+        roughness: 0.9 
+    });
+    const streetMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x0C0C12, // Calles un poco más claras
+        metalness: 0.2,
+        roughness: 0.7 
+    });
+    const carLightMaterial = new THREE.MeshBasicMaterial({ color: 0xffffee }); // Luces de coche blanco muy brillante
     // Array de colores para carros
-    const carBodyColors = [0xaa2222, 0x2244aa, 0xaaaaaa, 0x22aa44, 0x888822];
-    const carBodyMaterials = carBodyColors.map(color => new THREE.MeshLambertMaterial({ color }));
-    const wheelMaterial = new THREE.MeshLambertMaterial({ color: 0x1a1a1a }); // Material negro/gris oscuro para ruedas
-    const poleMaterial = new THREE.MeshLambertMaterial({ color: 0x666677 }); // Material poste grisáceo
-    const streetLightMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }); // Blanco puro ya es brillante
-    const trafficLightBodyMaterial = new THREE.MeshLambertMaterial({ color: 0x2a2a2a });
-    const redLightMaterial = new THREE.MeshBasicMaterial({ color: 0xff4444 }); // Rojo más vibrante (antes 0xff6666)
-    const amberLightMaterial = new THREE.MeshBasicMaterial({ color: 0xffcc66 }); // Ámbar más vibrante (antes 0xffdd88)
-    const greenLightMaterial = new THREE.MeshBasicMaterial({ color: 0x44ff44 }); // Verde más vibrante (antes 0x66ff66)
-    const windowMaterial = new THREE.MeshBasicMaterial({ color: 0xffffd0, side: THREE.DoubleSide }); // Amarillo más saturado, antes 0xffffe0
+    const carBodyColors = [0x9A3333, 0x3050A0, 0x909090, 0x308844, 0x888830]; // Colores más claros y vivos, solo ligeramente oscurecidos para la noche
+    const carBodyMaterials = carBodyColors.map(color => new THREE.MeshStandardMaterial({ 
+        color,
+        metalness: 0.3,  // Mucho menos metálico para que el color base domine
+        roughness: 0.4,  // Un poco más rugoso para un color más sólido y menos reflejos especulares
+    }));
+    const wheelMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x080808, // Ruedas un poco más claras
+        metalness: 0.1,
+        roughness: 0.8
+    }); 
+    const poleMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x383848, // Postes más claros
+        metalness: 0.6, 
+        roughness: 0.35 
+    }); 
+    const streetLightMaterial = new THREE.MeshBasicMaterial({ color: 0xffffdd, side: THREE.DoubleSide }); // Luz de farola amarilla pálida
+    const trafficLightBodyMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x202028, // Cuerpo de semáforo más claro
+        metalness: 0.5,
+        roughness: 0.45
+    });
+    const redLightMaterial = new THREE.MeshBasicMaterial({ color: 0xff2222, toneMapped: false }); 
+    const amberLightMaterial = new THREE.MeshBasicMaterial({ color: 0xffaa33, toneMapped: false }); 
+    const greenLightMaterial = new THREE.MeshBasicMaterial({ color: 0x22ff33, toneMapped: false }); 
+    const windowMaterial = new THREE.MeshBasicMaterial({ color: 0xaaaaff, side: THREE.DoubleSide, toneMapped: false });
     // Materiales para Peatones
-    const pedestrianColors = [0xaaaaaa, 0x8888aa, 0xaa8888, 0x88aa88, 0xaaaa88, 0x88aaaa];
+    const pedestrianColors = [0x8A8A8A, 0x707090, 0x907070, 0x709070, 0x8A8A7A, 0x708090]; // Colores ligeramente más claros y con tintes más definidos
     const pedestrianMaterials = pedestrianColors.map(color => new THREE.MeshStandardMaterial({
          color, 
          roughness: 0.8, 
@@ -130,9 +161,9 @@ const BuildingBackground = ({ isFollowing, onFollowStart }) => {
          polygonOffsetUnits: 1   // Unidades de offset
     }));
     // Material para Líneas de Calle
-    const streetLineMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    const streetLineMaterial = new THREE.MeshBasicMaterial({ color: 0xaaaa00, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }); // Líneas amarillas más oscuras
     // Material para la Luna
-    const moonMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false }); // Añadir fog: false
+    const moonMaterial = new THREE.MeshBasicMaterial({ color: 0xddddff, fog: false }); // Luna azulada pálida
     // Material para Estrellas
     const starMaterial = new THREE.PointsMaterial({
         size: 1.5, // Tamaño de las estrellas (en píxeles)
